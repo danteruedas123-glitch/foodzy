@@ -1,0 +1,27 @@
+[
+  {
+    "id": "ali-001",
+    "nombre": "Leche deslactosada",
+    "categoria": "Lácteos",
+    "cantidad": { "valor": 1.0, "unidad": "litro" },
+    "fechaVencimiento": "2026-08-25T00:00:00Z",
+    "estado": { "tipo": "disponible", "fechaIngreso": "2026-08-10T14:30:00Z" }
+  },
+  {
+    "id": "ali-002",
+    "nombre": "Manzanas",
+    "categoria": "Frutas",
+    "cantidad": { "valor": 500, "unidad": "gramos" },
+    "fechaVencimiento": "2026-08-15T00:00:00Z",
+    "estado": { "tipo": "consumido", "fechaConsumo": "2026-08-12T09:15:00Z" }
+  },
+  {
+    "id": "ali-003",
+    "nombre": "Yogurt griego",
+    "categoria": "Lácteos",
+    "cantidad": { "valor": 200, "unidad": "gramos" },
+    "fechaVencimiento": "2026-08-01T00:00:00Z",
+    "estado": { "tipo": "desechado", "motivo": "Expiró y tenía mal olor." },
+    "fotos": []
+  }
+]
