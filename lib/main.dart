@@ -1,63 +1,73 @@
 import 'package:flutter/material.dart';
-import 'package:foodzy/features/alimentos/data/alimentos_locales.dart';
-import 'package:foodzy/features/alimentos/domain/alimento.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:foodzy/features/alimentos/presentation/pantallas/pantalla_alimentos.dart';
+import 'package:foodzy/features/auth/presentation/pantallas/pantalla_login.dart';
+import 'package:foodzy/features/auth/presentation/providers/auth_provider.dart';
+import 'package:foodzy/features/configuracion/presentation/providers/theme_provider.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-void main() => runApp(const FoodzyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-class FoodzyApp extends StatelessWidget {
+  // Inicializamos SharedPreferences de forma asíncrona antes de arrancar
+  final sharedPreferences = await SharedPreferences.getInstance();
+
+  runApp(
+    ProviderScope(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(sharedPreferences),
+      ],
+      child: const FoodzyApp(),
+    ),
+  );
+}
+
+class FoodzyApp extends ConsumerWidget {
   const FoodzyApp({super.key});
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-        title: 'Foodzy',
-        theme: ThemeData(colorSchemeSeed: Colors.green),
-        home: const PantallaAlimentos(),
-      );
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeSettings = ref.watch(themeProvider);
+    final authState = ref.watch(authProvider);
 
-class PantallaAlimentos extends StatefulWidget {
-  const PantallaAlimentos({super.key});
+    // Seleccionamos dinámicamente el TextTheme
+    TextTheme currentTextTheme;
+    switch (themeSettings.fontFamily) {
+      case 'Lato':
+        currentTextTheme = GoogleFonts.latoTextTheme();
+        break;
+      case 'Montserrat':
+        currentTextTheme = GoogleFonts.montserratTextTheme();
+        break;
+      case 'Poppins':
+        currentTextTheme = GoogleFonts.poppinsTextTheme();
+        break;
+      case 'Roboto':
+      default:
+        currentTextTheme = GoogleFonts.robotoTextTheme();
+        break;
+    }
 
-  @override
-  State<PantallaAlimentos> createState() => _PantallaAlimentosState();
-}
-
-class _PantallaAlimentosState extends State<PantallaAlimentos> {
-  // `late final` en el campo: el Future se crea UNA vez.
-  late final Future<List<Alimento>> _alimentos = AlimentosLocales().obtenerTodos();
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Mi Despensa - Foodzy')),
-        body: FutureBuilder<List<Alimento>>(
-          future: _alimentos,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snapshot.hasError) {
-              return Center(child: Text('No se pudo leer:\n${snapshot.error}'));
-            }
-
-            final alimentos = snapshot.data ?? const <Alimento>[];
-            return ListView.separated(
-              itemCount: alimentos.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, i) {
-                final alimento = alimentos[i];
-                return ListTile(
-                  title: Text(alimento.nombre),
-                  subtitle: Text(
-                    '${alimento.categoria} · ${alimento.cantidad.valor} ${alimento.cantidad.unidad}\nEstado: ${alimento.estado.etiqueta}',
-                  ),
-                  trailing: alimento.tieneFotos
-                      ? const Icon(Icons.photo_outlined)
-                      : null,
-                  isThreeLine: true,
-                );
-              },
-            );
-          },
+    return MaterialApp(
+      title: 'Foodzy',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorSchemeSeed: themeSettings.primaryColor,
+        useMaterial3: true,
+        scaffoldBackgroundColor: Colors.grey.shade50,
+        textTheme: currentTextTheme,
+        appBarTheme: AppBarTheme(
+          centerTitle: true,
+          elevation: 0,
+          backgroundColor: Colors.white.withValues(alpha: 0.8),
+          surfaceTintColor: Colors.transparent,
+          scrolledUnderElevation: 0,
         ),
-      );
+      ),
+      home: authState.isAuthenticated
+          ? const PantallaAlimentos()
+          : const PantallaLogin(),
+    );
+  }
 }

@@ -7,4 +7,8 @@ abstract interface class AlimentosRepository {
   Future<Alimento?> obtenerPorId(String id);
   
   Future<List<Alimento>> obtenerDisponibles();
+  
+  Future<void> guardar(Alimento alimento);
+  
+  Future<void> eliminar(String id);
 }

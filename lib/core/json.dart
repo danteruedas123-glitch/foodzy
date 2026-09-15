@@ -3,6 +3,7 @@
 /// La frontera con el mundo exterior es el sitio donde el compilador deja de
 /// ayudar: `jsonDecode` devuelve `dynamic`. Estas funciones devuelven la
 /// confianza al otro lado, y cuando no pueden, dicen exactamente por qué.
+library;
 
 /// Un campo del JSON no tiene la forma que el modelo espera.
 class CampoInvalido implements Exception {

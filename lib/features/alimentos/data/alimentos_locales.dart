@@ -35,7 +35,7 @@ class AlimentosLocales implements AlimentosRepository {
 
     return _cache = decodificado
         .map((e) => Alimento.fromJson(e as Map<String, dynamic>))
-        .toList(growable: false);
+        .toList(growable: true);
   }
 
   @override
@@ -50,5 +50,22 @@ class AlimentosLocales implements AlimentosRepository {
   Future<List<Alimento>> obtenerDisponibles() async {
     final todos = await obtenerTodos();
     return todos.where((a) => a.estado is Disponible).toList();
+  }
+
+  @override
+  Future<void> guardar(Alimento alimento) async {
+    final todos = await obtenerTodos();
+    final index = todos.indexWhere((a) => a.id == alimento.id);
+    if (index >= 0) {
+      todos[index] = alimento;
+    } else {
+      todos.add(alimento);
+    }
+  }
+
+  @override
+  Future<void> eliminar(String id) async {
+    final todos = await obtenerTodos();
+    todos.removeWhere((a) => a.id == id);
   }
 }
