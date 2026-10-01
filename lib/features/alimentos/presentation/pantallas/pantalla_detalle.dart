@@ -3,12 +3,13 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:foodzy/core/formato.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
 import 'package:foodzy/features/alimentos/domain/cantidad.dart';
 import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
 import 'package:foodzy/features/alimentos/presentation/pantallas/pantalla_editar.dart';
 import 'package:foodzy/features/alimentos/presentation/providers/alimentos_provider.dart';
-import 'package:intl/intl.dart';
+import 'package:foodzy/features/alimentos/presentation/widgets/opciones_fecha.dart';
 
 class PantallaDetalle extends ConsumerWidget {
   const PantallaDetalle({super.key, required this.alimento});
@@ -72,6 +73,13 @@ class PantallaDetalle extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    // Siempre se muestra la versión más reciente (la fecha puede cambiar aquí mismo).
+    final alimento = ref
+            .watch(alimentosProvider)
+            .value
+            ?.where((a) => a.id == this.alimento.id)
+            .firstOrNull ??
+        this.alimento;
     final bool vencido = alimento.estaVencido(DateTime.now());
 
     return Scaffold(
@@ -165,13 +173,41 @@ class PantallaDetalle extends ConsumerWidget {
                     _InfoRow(
                       icon: Icons.calendar_today,
                       label: 'Fecha de Vencimiento',
-                      value: DateFormat.yMMMMd().format(
-                        alimento.fechaVencimiento,
-                      ),
+                      value: describirFecha(alimento),
                       valueColor: vencido && alimento.estado is Disponible
                           ? Colors.red
                           : null,
                     ),
+                    if (alimento.estado is Disponible)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: () async {
+                            final nuevo = await editarFechaAlimento(context, ref, alimento);
+                            if (nuevo != null) {
+                              await ref.read(alimentosProvider.notifier).actualizar(nuevo);
+                            }
+                          },
+                          icon: const Icon(Icons.edit_calendar_rounded, size: 18),
+                          label: const Text('Escanear o cambiar la fecha'),
+                        ),
+                      ),
+                    if (alimento.ubicacion != null) ...[
+                      const SizedBox(height: 16),
+                      _InfoRow(
+                        icon: Icons.place_outlined,
+                        label: 'Dónde lo guardas',
+                        value: '${alimento.ubicacion!.emoji} ${alimento.ubicacion!.etiqueta}',
+                      ),
+                    ],
+                    if (alimento.precio != null) ...[
+                      const SizedBox(height: 16),
+                      _InfoRow(
+                        icon: Icons.sell_outlined,
+                        label: 'Precio',
+                        value: '\$${fmtNum(alimento.precio!)}',
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     _InfoRow(
                       icon: Icons.info_outline,
@@ -196,9 +232,7 @@ class PantallaDetalle extends ConsumerWidget {
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () async {
-                        final double step = alimento.cantidad.unidad == 'u'
-                            ? 1.0
-                            : 0.1;
+                        final double step = pasoPara(alimento.cantidad.unidad, alimento.cantidad.valor);
                         final double? consumido = await showDialog<double>(
                           context: context,
                           builder: (context) {
@@ -231,11 +265,7 @@ class PantallaDetalle extends ConsumerWidget {
                                           ),
                                           const SizedBox(width: 16),
                                           Text(
-                                            cantidad.toStringAsFixed(
-                                              alimento.cantidad.unidad == 'u'
-                                                  ? 0
-                                                  : 1,
-                                            ),
+                                            fmtNum(cantidad),
                                             style: const TextStyle(
                                               fontSize: 32,
                                               fontWeight: FontWeight.bold,
@@ -328,6 +358,7 @@ class PantallaDetalle extends ConsumerWidget {
                       onPressed: () async {
                         final nuevoEstado = Desechado(
                           'Vencido o en mal estado',
+                          fecha: DateTime.now(),
                         );
                         final actualizado = alimento.copyWith(
                           estado: nuevoEstado,

@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Foodzy usa la cámara para registrar tu compra, leer facturas y detectar la comida que sacas.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Foodzy necesita acceder a tus fotos para analizar compras y facturas.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

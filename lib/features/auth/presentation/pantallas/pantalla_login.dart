@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:foodzy/core/nube.dart';
 import 'package:foodzy/features/auth/presentation/pantallas/pantalla_registro.dart';
 import 'package:foodzy/features/auth/presentation/providers/auth_provider.dart';
 import 'package:foodzy/features/auth/presentation/widgets/video_background.dart';
@@ -17,13 +18,48 @@ class _PantallaLoginState extends ConsumerState<PantallaLogin> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscureText = true;
-  bool _videoFinished = false;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _recuperarContrasena() async {
+    final controlador = TextEditingController(text: _emailController.text.trim());
+    final correo = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Recuperar contraseña'),
+        content: TextField(
+          controller: controlador,
+          keyboardType: TextInputType.emailAddress,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Tu correo'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controlador.text.trim()),
+            child: const Text('Enviar enlace'),
+          ),
+        ],
+      ),
+    );
+    if (correo == null || correo.isEmpty) return;
+    try {
+      await ref.read(authProvider.notifier).recuperarContrasena(correo);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Te enviamos un correo para restablecer la contraseña.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
   }
 
   Future<void> _handleLogin() async {
@@ -52,7 +88,7 @@ class _PantallaLoginState extends ConsumerState<PantallaLogin> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('$e')),
         );
       }
     } finally {
@@ -66,30 +102,10 @@ class _PantallaLoginState extends ConsumerState<PantallaLogin> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // 1. Fondo limpio infinito (Se reproduce completo y repite)
+          // Fondo animado en bucle (sin presentación previa)
           const VideoBackground(
             assetPath: 'assets/videos/fondo_limpio.mp4',
             loop: true,
-          ),
-
-          // 2. Fondo de Video Original (Se corta a los 7s exactos)
-          IgnorePointer(
-            ignoring: _videoFinished,
-            child: AnimatedOpacity(
-              opacity: _videoFinished ? 0.0 : 1.0,
-              duration: const Duration(milliseconds: 300),
-              child: VideoBackground(
-                assetPath: 'assets/videos/login_video.mp4',
-                stopAtDuration: const Duration(milliseconds: 7000), // Exactamente 7 segundos
-                onVideoFinished: () {
-                  if (mounted) {
-                    setState(() {
-                      _videoFinished = true;
-                    });
-                  }
-                },
-              ),
-            ),
           ),
 
           // Capa oscura muy sutil para asegurar legibilidad
@@ -97,13 +113,8 @@ class _PantallaLoginState extends ConsumerState<PantallaLogin> {
             color: Colors.black.withValues(alpha: 0.2),
           ),
 
-          // 3. Formulario (Aparece cuando termina el video original a los 7s)
-          AnimatedOpacity(
-            opacity: _videoFinished ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 600),
-            curve: Curves.easeInOut,
-            child: _videoFinished ? _buildLoginForm(context) : const SizedBox.shrink(),
-          ),
+          // Formulario de inicio de sesión
+          _buildLoginForm(context),
         ],
       ),
     );
@@ -216,6 +227,17 @@ class _PantallaLoginState extends ConsumerState<PantallaLogin> {
                       ),
               ),
             ),
+            if (Nube.disponible)
+              TextButton(
+                onPressed: _recuperarContrasena,
+                child: Text(
+                  '¿Olvidaste tu contraseña?',
+                  style: GoogleFonts.quicksand(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
           ],
         ),
       ),

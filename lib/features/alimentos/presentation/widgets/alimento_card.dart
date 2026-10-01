@@ -3,8 +3,94 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
-import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
-import 'package:intl/intl.dart';
+import 'package:foodzy/features/alimentos/presentation/widgets/estado_visual.dart';
+
+/// Miniatura de un alimento: su foto o, si no hay, un emoji de su categoría.
+class FotoAlimento extends StatelessWidget {
+  const FotoAlimento({super.key, required this.alimento, this.tamano = 64});
+
+  final Alimento alimento;
+  final double tamano;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final emoji = Center(
+      child: Text(
+        emojiCategoria(alimento.categoria, alimento.nombre),
+        style: TextStyle(fontSize: tamano * 0.5),
+      ),
+    );
+    final fondo = Container(
+      width: tamano,
+      height: tamano,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(tamano * 0.3),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [scheme.primaryContainer, scheme.tertiaryContainer],
+        ),
+      ),
+      child: emoji,
+    );
+
+    if (alimento.fotos.isEmpty) return fondo;
+
+    final path = alimento.fotos.first;
+    final esRed = path.startsWith('http') || path.startsWith('blob:');
+    Widget imagen;
+    if (esRed) {
+      imagen = Image.network(path, fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => fondo);
+    } else if (kIsWeb) {
+      return fondo;
+    } else {
+      imagen = Image.file(File(path), fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => fondo);
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(tamano * 0.3),
+      child: SizedBox(width: tamano, height: tamano, child: imagen),
+    );
+  }
+}
+
+/// Etiqueta redondeada con el estado (vence en 3 días, vencido, etc.).
+class EstadoChip extends StatelessWidget {
+  const EstadoChip({super.key, required this.visual});
+
+  final EstadoVisual visual;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: visual.color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(visual.icono, size: 14, color: visual.color),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              visual.texto,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: visual.color,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class AlimentoCard extends StatelessWidget {
   const AlimentoCard({super.key, required this.alimento, this.onTap});
@@ -14,148 +100,66 @@ class AlimentoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final estadoInfo = _getEstadoInfo(alimento);
+    final theme = Theme.of(context);
+    final visual = estadoVisual(alimento);
+    final cantidad = alimento.cantidad;
+    final valor = cantidad.valor == cantidad.valor.roundToDouble()
+        ? cantidad.valor.toInt().toString()
+        : cantidad.valor.toStringAsFixed(1);
 
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      elevation: 2,
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerLow,
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: estadoInfo.color.withValues(alpha: 0.5),
-          width: 1,
-        ),
+        borderRadius: BorderRadius.circular(22),
+        side: BorderSide(color: visual.color.withValues(alpha: 0.25)),
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(12),
-        leading: _buildThumbnail(),
-        title: Text(
-          alimento.nombre,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Text(
-              '${alimento.categoria} • ${alimento.cantidad.valor} ${alimento.cantidad.unidad}',
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(estadoInfo.icon, size: 16, color: estadoInfo.color),
-                const SizedBox(width: 4),
-                Text(
-                  estadoInfo.text,
-                  style: TextStyle(
-                    color: estadoInfo.color,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        trailing: const Icon(Icons.chevron_right),
+      child: InkWell(
         onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Hero(
+                tag: 'foto_${alimento.id}',
+                child: FotoAlimento(alimento: alimento),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      alimento.nombre,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${alimento.categoria} · $valor ${cantidad.unidad}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    EstadoChip(visual: visual),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded,
+                  color: theme.colorScheme.outline),
+            ],
+          ),
+        ),
       ),
     );
-  }
-
-  Widget _buildThumbnail() {
-    if (alimento.fotos.isEmpty) {
-      return CircleAvatar(
-        backgroundColor: Colors.grey.shade200,
-        radius: 24,
-        child: const Icon(Icons.fastfood, color: Colors.grey),
-      );
-    }
-
-    final path = alimento.fotos.first;
-    final isNetwork = path.startsWith('http') || path.startsWith('blob:');
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: isNetwork
-          ? Image.network(
-              path,
-              width: 50,
-              height: 50,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) =>
-                  const _FallbackIcon(),
-            )
-          : (kIsWeb
-                ? const _FallbackIcon()
-                : Image.file(
-                    File(path),
-                    width: 50,
-                    height: 50,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) =>
-                        const _FallbackIcon(),
-                  )),
-    );
-  }
-}
-
-class _FallbackIcon extends StatelessWidget {
-  const _FallbackIcon();
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 50,
-      height: 50,
-      color: Colors.grey.shade200,
-      child: const Icon(Icons.image_not_supported, color: Colors.grey),
-    );
-  }
-}
-
-class _EstadoInfo {
-  _EstadoInfo(this.text, this.color, this.icon);
-  final String text;
-  final Color color;
-  final IconData icon;
-}
-
-_EstadoInfo _getEstadoInfo(Alimento a) {
-  final estado = a.estado;
-  if (estado is Consumido) {
-    return _EstadoInfo(
-      'Consumido el ${DateFormat.yMd().format(estado.fechaConsumo)}',
-      Colors.blue,
-      Icons.check_circle,
-    );
-  } else if (estado is Desechado) {
-    return _EstadoInfo(
-      'Desechado\nMotivo: ${estado.motivo}',
-      Colors.grey,
-      Icons.delete,
-    );
-  } else {
-    // Disponible
-    final hoy = DateTime.now();
-    final diasRestantes = a.fechaVencimiento.difference(hoy).inDays;
-
-    if (diasRestantes < 0) {
-      return _EstadoInfo(
-        'Vencido hace ${diasRestantes.abs()} días',
-        Colors.red,
-        Icons.warning,
-      );
-    } else if (diasRestantes <= 3) {
-      return _EstadoInfo(
-        'Vence en $diasRestantes días',
-        Colors.orange,
-        Icons.access_time,
-      );
-    } else {
-      return _EstadoInfo(
-        'Vence en $diasRestantes días',
-        Colors.green,
-        Icons.eco,
-      );
-    }
   }
 }

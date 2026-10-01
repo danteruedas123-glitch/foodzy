@@ -10,7 +10,10 @@ sealed class EstadoAlimento {
     return switch (tipo) {
       'disponible' => Disponible(leerFecha(json, 'fechaIngreso')),
       'consumido' => Consumido(leerFecha(json, 'fechaConsumo')),
-      'desechado' => Desechado(leerTexto(json, 'motivo')),
+      'desechado' => Desechado(
+          leerTexto(json, 'motivo'),
+          fecha: DateTime.tryParse(leerTextoOpcional(json, 'fecha') ?? ''),
+        ),
       _ => throw CampoInvalido('estado.tipo', 'no es un estado conocido', tipo),
     };
   }
@@ -25,7 +28,11 @@ sealed class EstadoAlimento {
             'tipo': 'consumido',
             'fechaConsumo': fechaConsumo.toIso8601String(),
           },
-        Desechado(:final motivo) => {'tipo': 'desechado', 'motivo': motivo},
+        Desechado(:final motivo, :final fecha) => {
+            'tipo': 'desechado',
+            'motivo': motivo,
+            if (fecha != null) 'fecha': fecha.toIso8601String(),
+          },
       };
 
   /// Regla de negocio, no de interfaz: si el alimento aún se puede consumir.
@@ -75,16 +82,21 @@ final class Consumido extends EstadoAlimento {
 }
 
 final class Desechado extends EstadoAlimento {
-  const Desechado(this.motivo) : assert(motivo != '', 'desechar exige motivo');
+  const Desechado(this.motivo, {this.fecha})
+      : assert(motivo != '', 'desechar exige motivo');
 
   final String motivo;   // desechar SIN motivo no se puede ni escribir
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) || other is Desechado && other.motivo == motivo;
+  /// Cuándo se desechó (opcional: los registros antiguos no la tienen).
+  final DateTime? fecha;
 
   @override
-  int get hashCode => Object.hash(runtimeType, motivo);
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Desechado && other.motivo == motivo && other.fecha == fecha;
+
+  @override
+  int get hashCode => Object.hash(runtimeType, motivo, fecha);
 
   @override
   String toString() => 'Desechado($motivo)';
