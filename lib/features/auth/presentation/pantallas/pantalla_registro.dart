@@ -54,9 +54,11 @@ class _PantallaRegistroState extends ConsumerState<PantallaRegistro> {
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cuenta creada con éxito. Por favor, inicia sesión.'),
-            backgroundColor: Color(0xFF7DD279),
+          SnackBar(
+            content: Text(ref.read(authProvider).isAuthenticated
+                ? '¡Cuenta creada! Bienvenido a Foodzy.'
+                : 'Cuenta creada con éxito. Por favor, inicia sesión.'),
+            backgroundColor: const Color(0xFF7DD279),
           ),
         );
         Navigator.of(context).pop(); // Regresar al login
@@ -64,7 +66,7 @@ class _PantallaRegistroState extends ConsumerState<PantallaRegistro> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('$e')),
         );
       }
     } finally {

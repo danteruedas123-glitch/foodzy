@@ -20,6 +20,25 @@ enum FechaOrigen {
       );
 }
 
+/// Dónde se guarda un alimento. Cambia mucho cuánto dura.
+enum Ubicacion {
+  nevera('Nevera', '🧊'),
+  congelador('Congelador', '❄️'),
+  alacena('Alacena', '🗄️');
+
+  const Ubicacion(this.etiqueta, this.emoji);
+  final String etiqueta;
+  final String emoji;
+
+  /// `null` si el texto no corresponde a ninguna (datos antiguos).
+  static Ubicacion? desde(String? nombre) {
+    for (final u in Ubicacion.values) {
+      if (u.name == nombre) return u;
+    }
+    return null;
+  }
+}
+
 /// Un alimento registrado.
 ///
 /// Es una **entidad**: tiene identidad propia. Dos alimentos con los mismos
@@ -34,6 +53,10 @@ class Alimento {
     required this.estado,
     this.fotos = const <String>[],
     this.origenFecha = FechaOrigen.manual,
+    this.ubicacion,
+    this.precio,
+    this.fechaCompra,
+    this.cantidadInicial,
   });
 
   factory Alimento.fromJson(Map<String, dynamic> json) => Alimento(
@@ -45,6 +68,11 @@ class Alimento {
         estado: EstadoAlimento.fromJson(leerMapa(json, 'estado')),
         fotos: leerTextos(json, 'fotos'),
         origenFecha: FechaOrigen.desde(leerTextoOpcional(json, 'origenFecha')),
+        ubicacion: Ubicacion.desde(leerTextoOpcional(json, 'ubicacion')),
+        precio: (json['precio'] as num?)?.toDouble(),
+        fechaCompra:
+            DateTime.tryParse(leerTextoOpcional(json, 'fechaCompra') ?? ''),
+        cantidadInicial: (json['cantidadInicial'] as num?)?.toDouble(),
       );
 
   final String id;
@@ -56,6 +84,18 @@ class Alimento {
   final List<String> fotos;
   final FechaOrigen origenFecha;
 
+  /// Dónde se guarda (nevera, congelador, alacena). `null` si no se indicó.
+  final Ubicacion? ubicacion;
+
+  /// Lo que costó este producto (el total de su renglón en la factura).
+  final double? precio;
+
+  /// Cuándo se compró o registró.
+  final DateTime? fechaCompra;
+
+  /// Cantidad con la que entró, para saber qué parte se desperdició.
+  final double? cantidadInicial;
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'nombre': nombre,
@@ -65,6 +105,10 @@ class Alimento {
         'estado': estado.toJson(),
         'fotos': fotos,
         'origenFecha': origenFecha.name,
+        if (ubicacion != null) 'ubicacion': ubicacion!.name,
+        if (precio != null) 'precio': precio,
+        if (fechaCompra != null) 'fechaCompra': fechaCompra!.toIso8601String(),
+        if (cantidadInicial != null) 'cantidadInicial': cantidadInicial,
       };
 
   // ── Reglas de negocio ───────────────────────────────────────────────────
@@ -88,21 +132,36 @@ class Alimento {
 
   bool get noVence => fechaVencimiento.year >= 9999;
 
+  /// Cuándo entró a la despensa: la fecha de compra o, en registros antiguos,
+  /// la de ingreso del estado "disponible".
+  DateTime? get ingreso {
+    if (fechaCompra != null) return fechaCompra;
+    final e = estado;
+    return e is Disponible ? e.fechaIngreso : null;
+  }
+
   /// Copia con otra fecha de vencimiento y su origen (ej. cuando la persona
   /// la completa o la IA la lee de una foto).
   Alimento conFecha(
     DateTime fecha, {
     FechaOrigen origen = FechaOrigen.manual,
   }) =>
-      Alimento(
-        id: id,
+      _copiar(fechaVencimiento: fecha, origenFecha: origen);
+
+  /// Copia con otro id y otras fotos (al guardar lo detectado por la IA).
+  Alimento conIdYFotos(String nuevoId, List<String> nuevasFotos) => Alimento(
+        id: nuevoId,
         nombre: nombre,
         categoria: categoria,
         cantidad: cantidad,
-        fechaVencimiento: fecha,
+        fechaVencimiento: fechaVencimiento,
         estado: estado,
-        fotos: fotos,
-        origenFecha: origen,
+        fotos: nuevasFotos,
+        origenFecha: origenFecha,
+        ubicacion: ubicacion,
+        precio: precio,
+        fechaCompra: fechaCompra,
+        cantidadInicial: cantidadInicial,
       );
 
   /// Copia marcada como "no vence".
@@ -110,22 +169,51 @@ class Alimento {
 
   // ── Copia ───────────────────────────────────────────────────────────────
 
+  /// Copia de uso general. La identidad (`id`) no cambia nunca, ni la fecha de
+  /// vencimiento: para eso están [conFecha] y [sinVencimiento].
   Alimento copyWith({
     String? nombre,
     String? categoria,
     Cantidad? cantidad,
     EstadoAlimento? estado,
     List<String>? fotos,
+    Ubicacion? ubicacion,
+    double? precio,
+  }) =>
+      _copiar(
+        nombre: nombre,
+        categoria: categoria,
+        cantidad: cantidad,
+        estado: estado,
+        fotos: fotos,
+        ubicacion: ubicacion,
+        precio: precio,
+      );
+
+  Alimento _copiar({
+    String? nombre,
+    String? categoria,
+    Cantidad? cantidad,
+    DateTime? fechaVencimiento,
+    EstadoAlimento? estado,
+    List<String>? fotos,
+    FechaOrigen? origenFecha,
+    Ubicacion? ubicacion,
+    double? precio,
   }) =>
       Alimento(
-        id: id,                            // la identidad NO se copia con cambios
+        id: id,
         nombre: nombre ?? this.nombre,
         categoria: categoria ?? this.categoria,
         cantidad: cantidad ?? this.cantidad,
-        fechaVencimiento: fechaVencimiento, // ni la fecha de vencimiento
+        fechaVencimiento: fechaVencimiento ?? this.fechaVencimiento,
         estado: estado ?? this.estado,
         fotos: fotos ?? this.fotos,
-        origenFecha: origenFecha,
+        origenFecha: origenFecha ?? this.origenFecha,
+        ubicacion: ubicacion ?? this.ubicacion,
+        precio: precio ?? this.precio,
+        fechaCompra: fechaCompra,
+        cantidadInicial: cantidadInicial,
       );
 
   @override
@@ -139,6 +227,10 @@ class Alimento {
           other.fechaVencimiento == fechaVencimiento &&
           other.estado == estado &&
           other.origenFecha == origenFecha &&
+          other.ubicacion == ubicacion &&
+          other.precio == precio &&
+          other.fechaCompra == fechaCompra &&
+          other.cantidadInicial == cantidadInicial &&
           listasIguales(other.fotos, fotos);
 
   @override
@@ -151,6 +243,10 @@ class Alimento {
         estado,
         Object.hashAll(fotos),
         origenFecha,
+        ubicacion,
+        precio,
+        fechaCompra,
+        cantidadInicial,
       );
 
   @override

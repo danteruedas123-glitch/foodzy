@@ -5,6 +5,7 @@ import 'package:foodzy/features/alimentos/domain/alimento.dart';
 import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
 import 'package:foodzy/features/alimentos/presentation/pantallas/pantalla_detalle.dart';
 import 'package:foodzy/features/alimentos/presentation/pantallas/pantalla_escaneo.dart';
+import 'package:foodzy/features/alimentos/presentation/pantallas/pantalla_estadisticas.dart';
 import 'package:foodzy/features/alimentos/presentation/pantallas/pantalla_por_reponer.dart';
 import 'package:foodzy/features/alimentos/presentation/pantallas/pantalla_retiro.dart';
 import 'package:foodzy/features/alimentos/presentation/providers/alimentos_provider.dart';
@@ -12,6 +13,7 @@ import 'package:foodzy/features/alimentos/presentation/providers/reposicion_prov
 import 'package:foodzy/features/alimentos/presentation/widgets/alimento_card.dart';
 import 'package:foodzy/features/alimentos/presentation/widgets/estado_visual.dart';
 import 'package:foodzy/features/auth/presentation/providers/auth_provider.dart';
+import 'package:foodzy/features/compras/presentation/pantalla_lista_compra.dart';
 
 /// Pestaña "Inicio": resumen, accesos rápidos y lo que vence pronto.
 class PantallaInicio extends ConsumerWidget {
@@ -217,6 +219,28 @@ class PantallaInicio extends ConsumerWidget {
         ),
         SliverToBoxAdapter(
           child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Row(
+              children: [
+                _Atajo(
+                  emoji: '📝',
+                  texto: 'Lista de compras',
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const PantallaListaCompra())),
+                ),
+                const SizedBox(width: 10),
+                _Atajo(
+                  emoji: '📊',
+                  texto: 'Tus números',
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const PantallaEstadisticas())),
+                ),
+              ],
+            ),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 24, 8, 6),
             child: Row(
               children: [
@@ -344,6 +368,42 @@ class _Accion extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(texto, style: const TextStyle(fontWeight: FontWeight.w800)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Atajo extends StatelessWidget {
+  const _Atajo({required this.emoji, required this.texto, required this.onTap});
+
+  final String emoji;
+  final String texto;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Expanded(
+      child: Material(
+        color: theme.colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            child: Row(
+              children: [
+                Text(emoji, style: const TextStyle(fontSize: 24)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(texto,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                ),
               ],
             ),
           ),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:foodzy/core/formato.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
+import 'package:foodzy/features/compras/presentation/lista_compra_provider.dart';
 import 'package:foodzy/features/alimentos/domain/cantidad.dart';
 import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
 import 'package:foodzy/features/alimentos/presentation/providers/alimentos_provider.dart';
@@ -28,6 +30,8 @@ class _PantallaEditarState extends ConsumerState<PantallaEditar> {
   
   DateTime _fechaVencimiento = DateTime.now().add(const Duration(days: 7));
   bool _noVence = false;
+  Ubicacion? _ubicacion;
+  late TextEditingController _precioController;
   FechaOrigen _origen = FechaOrigen.manual;
   
   bool _isLoading = false;
@@ -40,6 +44,10 @@ class _PantallaEditarState extends ConsumerState<PantallaEditar> {
     _categoriaController = TextEditingController(text: alimento?.categoria ?? '');
     _cantidadValorController = TextEditingController(text: alimento?.cantidad.valor.toString() ?? '');
     _cantidadUnidadController = TextEditingController(text: alimento?.cantidad.unidad ?? '');
+    _ubicacion = alimento?.ubicacion;
+    _precioController = TextEditingController(
+      text: alimento?.precio == null ? '' : fmtNum(alimento!.precio!),
+    );
     
     if (alimento != null) {
       _noVence = alimento.noVence;
@@ -56,6 +64,7 @@ class _PantallaEditarState extends ConsumerState<PantallaEditar> {
     _categoriaController.dispose();
     _cantidadValorController.dispose();
     _cantidadUnidadController.dispose();
+    _precioController.dispose();
     super.dispose();
   }
 
@@ -91,12 +100,17 @@ class _PantallaEditarState extends ConsumerState<PantallaEditar> {
       ),
       fechaVencimiento: _noVence ? Alimento.nuncaVence : _fechaVencimiento,
       origenFecha: _origen,
+      ubicacion: _ubicacion,
+      precio: double.tryParse(_precioController.text.replaceAll(',', '.').trim()),
+      fechaCompra: widget.alimentoExistente?.fechaCompra ?? DateTime.now(),
+      cantidadInicial: widget.alimentoExistente?.cantidadInicial ?? valorDouble,
       estado: widget.alimentoExistente?.estado ?? Disponible(DateTime.now()),
       fotos: widget.alimentoExistente?.fotos ?? const [],
     );
 
     if (widget.alimentoExistente == null) {
       await ref.read(alimentosProvider.notifier).agregar(nuevoAlimento);
+      await ref.read(listaCompraProvider.notifier).marcarCompradosPorNombre([nuevoAlimento.nombre]);
     } else {
       await ref.read(alimentosProvider.notifier).actualizar(nuevoAlimento);
     }
@@ -193,6 +207,30 @@ class _PantallaEditarState extends ConsumerState<PantallaEditar> {
                   : DateFormat.yMMMMd().format(_fechaVencimiento)),
               onTap: _noVence ? null : _seleccionarFecha,
               trailing: const Icon(Icons.edit),
+            ),
+            const SizedBox(height: 16),
+            Text('Dónde lo guardas', style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final u in Ubicacion.values)
+                  ChoiceChip(
+                    label: Text('${u.emoji} ${u.etiqueta}'),
+                    selected: _ubicacion == u,
+                    onSelected: (v) => setState(() => _ubicacion = v ? u : null),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _precioController,
+              decoration: const InputDecoration(
+                labelText: 'Precio (opcional)',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.attach_money_rounded),
+              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
             ),
             const SizedBox(height: 32),
             SizedBox(

@@ -3,10 +3,12 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:foodzy/core/formato.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
 import 'package:foodzy/features/alimentos/domain/scanner_service.dart';
 import 'package:foodzy/features/alimentos/presentation/providers/alimentos_provider.dart';
 import 'package:foodzy/features/alimentos/presentation/widgets/alimento_card.dart';
+import 'package:foodzy/features/compras/presentation/lista_compra_provider.dart';
 import 'package:foodzy/features/alimentos/presentation/widgets/opciones_fecha.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -82,22 +84,42 @@ class _PantallaEscaneoState extends ConsumerState<PantallaEscaneo> {
     setState(() => _items![i] = AlimentoDetectado(alimento: nuevo));
   }
 
+  /// Cambia dónde se guarda un producto. Si su fecha era estimada, se vuelve
+  /// a estimar para esa ubicación (congelado dura mucho más que en nevera).
+  Future<void> _cambiarUbicacion(int i, Ubicacion u) async {
+    final actual = _items![i].alimento;
+    setState(() => _items![i] = AlimentoDetectado(alimento: actual.copyWith(ubicacion: u)));
+    if (actual.origenFecha != FechaOrigen.estimada || actual.noVence) return;
+
+    try {
+      final est = await ref.read(scannerServiceProvider).estimarFecha(
+            nombre: actual.nombre,
+            categoria: actual.categoria,
+            ubicacion: u,
+          );
+      if (!mounted) return;
+      final base = _items![i].alimento;
+      final nuevo = est.noVence
+          ? base.sinVencimiento()
+          : base.conFecha(est.fecha!, origen: FechaOrigen.estimada);
+      setState(() => _items![i] = AlimentoDetectado(alimento: nuevo));
+    } catch (_) {
+      // Si la IA no responde se deja la fecha anterior; la persona puede editarla.
+    }
+  }
+
   Future<void> _guardar() async {
     final notifier = ref.read(alimentosProvider.notifier);
     var n = 0;
+    final base = DateTime.now().microsecondsSinceEpoch;
     for (final d in _items!) {
-      final a = d.alimento;
-      await notifier.agregar(Alimento(
-        id: '${DateTime.now().microsecondsSinceEpoch}-${n++}',
-        nombre: a.nombre,
-        categoria: a.categoria,
-        cantidad: a.cantidad,
-        fechaVencimiento: a.fechaVencimiento,
-        estado: a.estado,
-        fotos: [widget.imageFile.path],
-        origenFecha: a.origenFecha,
-      ));
+      await notifier.agregar(
+        d.alimento.conIdYFotos('$base-${n++}', [widget.imageFile.path]),
+      );
     }
+    await ref
+        .read(listaCompraProvider.notifier)
+        .marcarCompradosPorNombre(_items!.map((d) => d.alimento.nombre));
     if (!mounted) return;
     Navigator.of(context).pop(true);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -182,6 +204,7 @@ class _PantallaEscaneoState extends ConsumerState<PantallaEscaneo> {
       itemBuilder: (_, i) => _FilaDetectada(
         item: _items![i],
         onFecha: () => _elegirFecha(i),
+        onUbicacion: (u) => _cambiarUbicacion(i, u),
         onEliminar: () => setState(() => _items!.removeAt(i)),
       ),
     );
@@ -211,11 +234,13 @@ class _FilaDetectada extends StatelessWidget {
   const _FilaDetectada({
     required this.item,
     required this.onFecha,
+    required this.onUbicacion,
     required this.onEliminar,
   });
 
   final AlimentoDetectado item;
   final VoidCallback onFecha;
+  final ValueChanged<Ubicacion> onUbicacion;
   final VoidCallback onEliminar;
 
   @override
@@ -270,6 +295,34 @@ class _FilaDetectada extends StatelessWidget {
                     ),
                     onPressed: onFecha,
                     visualDensity: VisualDensity.compact,
+                  ),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      PopupMenuButton<Ubicacion>(
+                        tooltip: 'Dónde lo guardas',
+                        onSelected: onUbicacion,
+                        itemBuilder: (_) => [
+                          for (final u in Ubicacion.values)
+                            PopupMenuItem(value: u, child: Text('${u.emoji}  ${u.etiqueta}')),
+                        ],
+                        child: Chip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text(
+                            a.ubicacion == null
+                                ? 'Dónde lo guardas'
+                                : '${a.ubicacion!.emoji} ${a.ubicacion!.etiqueta}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ),
+                      if (a.precio != null)
+                        Chip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text('\$${fmtNum(a.precio!)}',
+                              style: const TextStyle(fontSize: 12)),
+                        ),
+                    ],
                   ),
                 ],
               ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:foodzy/core/captura.dart';
+import 'package:foodzy/features/alimentos/presentation/pantallas/pantalla_codigo_barras.dart';
 import 'package:foodzy/features/alimentos/presentation/pantallas/pantalla_editar.dart';
 import 'package:foodzy/features/alimentos/presentation/pantallas/pantalla_escaneo.dart';
 import 'package:foodzy/features/alimentos/presentation/pantallas/pantalla_retiro.dart';
@@ -96,6 +97,17 @@ class _MenuAnadir extends StatelessWidget {
                     MaterialPageRoute(builder: (_) => PantallaEscaneo(imageFile: img))))
                 : null,
           ),
+          if (hayCamara)
+            opcion(
+              icono: Icons.qr_code_scanner_rounded,
+              titulo: 'Código de barras',
+              detalle: 'Escanea varios productos seguidos, sin escribir nada',
+              color: const Color(0xFF0D9488),
+              onTap: () {
+                Navigator.of(context).pop();
+                nav.push(MaterialPageRoute(builder: (_) => const PantallaCodigoBarras()));
+              },
+            ),
           opcion(
             icono: Icons.receipt_long_rounded,
             titulo: 'Escanear factura',

@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foodzy/core/notificaciones.dart';
+import 'package:foodzy/core/nube.dart';
 import 'package:foodzy/features/auth/presentation/pantallas/pantalla_login.dart';
 import 'package:foodzy/features/auth/presentation/providers/auth_provider.dart';
 import 'package:foodzy/features/configuracion/presentation/providers/theme_provider.dart';
@@ -13,6 +14,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final sharedPreferences = await SharedPreferences.getInstance();
+  await Nube.iniciar();
   await NotificacionesService.instancia.iniciar();
 
   runApp(

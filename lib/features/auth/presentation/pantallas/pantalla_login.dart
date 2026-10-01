@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:foodzy/core/nube.dart';
 import 'package:foodzy/features/auth/presentation/pantallas/pantalla_registro.dart';
 import 'package:foodzy/features/auth/presentation/providers/auth_provider.dart';
 import 'package:foodzy/features/auth/presentation/widgets/video_background.dart';
@@ -23,6 +24,42 @@ class _PantallaLoginState extends ConsumerState<PantallaLogin> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _recuperarContrasena() async {
+    final controlador = TextEditingController(text: _emailController.text.trim());
+    final correo = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Recuperar contraseña'),
+        content: TextField(
+          controller: controlador,
+          keyboardType: TextInputType.emailAddress,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Tu correo'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controlador.text.trim()),
+            child: const Text('Enviar enlace'),
+          ),
+        ],
+      ),
+    );
+    if (correo == null || correo.isEmpty) return;
+    try {
+      await ref.read(authProvider.notifier).recuperarContrasena(correo);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Te enviamos un correo para restablecer la contraseña.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
   }
 
   Future<void> _handleLogin() async {
@@ -51,7 +88,7 @@ class _PantallaLoginState extends ConsumerState<PantallaLogin> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('$e')),
         );
       }
     } finally {
@@ -190,6 +227,17 @@ class _PantallaLoginState extends ConsumerState<PantallaLogin> {
                       ),
               ),
             ),
+            if (Nube.disponible)
+              TextButton(
+                onPressed: _recuperarContrasena,
+                child: Text(
+                  '¿Olvidaste tu contraseña?',
+                  style: GoogleFonts.quicksand(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
           ],
         ),
       ),

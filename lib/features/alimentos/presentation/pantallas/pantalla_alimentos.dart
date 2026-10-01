@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:foodzy/features/alimentos/domain/alimento.dart';
 import 'package:foodzy/features/alimentos/presentation/pantallas/pantalla_detalle.dart';
 import 'package:foodzy/features/alimentos/presentation/pantallas/pantalla_historial.dart';
 import 'package:foodzy/features/alimentos/presentation/providers/alimentos_provider.dart';
@@ -95,6 +96,36 @@ class _PantallaAlimentosState extends ConsumerState<PantallaAlimentos> {
                       selected: filtro == f,
                       onSelected: (_) =>
                           ref.read(filtroEstadoProvider.notifier).state = f,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: SizedBox(
+            height: 48,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: const Text('Todas las ubicaciones'),
+                    selected: ref.watch(filtroUbicacionProvider) == null,
+                    onSelected: (_) =>
+                        ref.read(filtroUbicacionProvider.notifier).state = null,
+                  ),
+                ),
+                for (final u in Ubicacion.values)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text('${u.emoji} ${u.etiqueta}'),
+                      selected: ref.watch(filtroUbicacionProvider) == u,
+                      onSelected: (_) =>
+                          ref.read(filtroUbicacionProvider.notifier).state = u,
                     ),
                   ),
               ],

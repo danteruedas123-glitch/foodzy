@@ -1,0 +1,48 @@
+rules_version = '2';
+
+// Reglas de seguridad de Foodzy.
+// Copia este contenido en: Firebase Console → Firestore Database → Reglas → Publicar.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ¿La persona con sesión iniciada pertenece a este hogar?
+    function esMiembro(hogarId) {
+      return request.auth != null &&
+        request.auth.uid in get(/databases/$(database)/documents/hogares/$(hogarId)).data.miembros;
+    }
+
+    // Datos de cada usuario: solo él los lee y escribe.
+    match /usuarios/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Códigos de invitación: se pueden consultar uno a uno (get), nunca listar.
+    match /invitaciones/{codigo} {
+      allow get: if request.auth != null;
+      allow create: if request.auth != null;
+    }
+
+    // Un hogar: lo ven sus miembros. Para unirse, la persona se añade a sí
+    // misma (un miembro nuevo) conociendo el id que obtuvo con el código.
+    match /hogares/{hogarId} {
+      allow create: if request.auth != null && request.auth.uid in request.resource.data.miembros;
+      allow read: if request.auth != null && request.auth.uid in resource.data.miembros;
+      allow update: if request.auth != null && (
+        request.auth.uid in resource.data.miembros ||
+        (
+          request.auth.uid in request.resource.data.miembros &&
+          request.resource.data.miembros.size() == resource.data.miembros.size() + 1 &&
+          request.resource.data.miembros.hasAll(resource.data.miembros)
+        )
+      );
+
+      // La despensa y la lista de compras: solo los miembros del hogar.
+      match /alimentos/{id} {
+        allow read, write: if esMiembro(hogarId);
+      }
+      match /lista/{id} {
+        allow read, write: if esMiembro(hogarId);
+      }
+    }
+  }
+}

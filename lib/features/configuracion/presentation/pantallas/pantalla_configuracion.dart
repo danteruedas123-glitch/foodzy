@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foodzy/core/notificaciones.dart';
+import 'package:foodzy/core/nube.dart';
+import 'package:foodzy/features/nube/hogar_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
 import 'package:foodzy/features/alimentos/presentation/providers/alimentos_provider.dart';
 import 'package:foodzy/features/alimentos/presentation/pantallas/pantalla_historial.dart';
@@ -57,6 +61,196 @@ class _PantallaConfiguracionState extends ConsumerState<PantallaConfiguracion> {
                 .titleMedium
                 ?.copyWith(fontWeight: FontWeight.w800)),
       );
+
+  Widget _tarjetaCuenta(ThemeData theme) {
+    final auth = ref.watch(authProvider);
+    final hogar = ref.watch(hogarProvider);
+
+    Widget caja(List<Widget> hijos) => Card(
+          elevation: 0,
+          color: theme.colorScheme.surfaceContainerLow,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: hijos),
+          ),
+        );
+
+    // Sin Firebase: todo vive en el teléfono.
+    if (!Nube.disponible || !auth.esNube) {
+      return caja([
+        Row(
+          children: [
+            Icon(Icons.phone_android_rounded, color: theme.colorScheme.outline),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text('Modo local', style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Tus datos están solo en este teléfono. Conecta Firebase para tener copia de seguridad en la nube y compartir tu despensa con tu familia (mira el README del proyecto).',
+          style: theme.textTheme.bodySmall,
+        ),
+      ]);
+    }
+
+    return caja([
+      Row(
+        children: [
+          Icon(Icons.cloud_done_rounded, color: theme.colorScheme.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(auth.email ?? 'Cuenta', style: const TextStyle(fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+      const SizedBox(height: 4),
+      Text('Tus datos se guardan en la nube y se sincronizan.', style: theme.textTheme.bodySmall),
+      const Divider(height: 28),
+      hogar.when(
+        loading: () => const Center(child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator())),
+        error: (e, _) => Text('No se pudo cargar el hogar: $e'),
+        data: (h) {
+          if (h == null) return const SizedBox.shrink();
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Tu hogar compartido', style: theme.textTheme.labelLarge),
+              const SizedBox(height: 4),
+              Text(
+                h.miembros <= 1
+                    ? 'Invita a tu familia con este código y compartirán la despensa y la lista de compras.'
+                    : 'Compartes la despensa con ${h.miembros - 1} persona(s) más.',
+                style: theme.textTheme.bodySmall,
+              ),
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  h.codigo,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 6,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: h.codigo));
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Código copiado')),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.copy_rounded, size: 18),
+                    label: const Text('Copiar'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => SharePlus.instance.share(ShareParams(
+                      text: 'Únete a mi despensa en Foodzy con este código: ${h.codigo}',
+                    )),
+                    icon: const Icon(Icons.ios_share_rounded, size: 18),
+                    label: const Text('Invitar'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                children: [
+                  TextButton.icon(
+                    onPressed: _unirseAHogar,
+                    icon: const Icon(Icons.group_add_rounded, size: 18),
+                    label: const Text('Unirme con un código'),
+                  ),
+                  if (h.miembros > 1)
+                    TextButton.icon(
+                      onPressed: _salirDelHogar,
+                      icon: Icon(Icons.exit_to_app_rounded, size: 18, color: theme.colorScheme.error),
+                      label: Text('Salir del hogar', style: TextStyle(color: theme.colorScheme.error)),
+                    ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    ]);
+  }
+
+  Future<void> _unirseAHogar() async {
+    final codigo = TextEditingController();
+    var copiar = true;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text('Unirme a un hogar'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: codigo,
+                autofocus: true,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(hintText: 'Código de 6 letras'),
+              ),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: copiar,
+                onChanged: (v) => setD(() => copiar = v ?? true),
+                title: const Text('Llevar mi despensa actual al hogar'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Unirme')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref.read(hogarProvider.notifier).unirse(codigo.text, copiarMisDatos: copiar);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('¡Listo! Ahora compartes la despensa.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _salirDelHogar() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Salir del hogar?'),
+        content: const Text('Dejarás de ver la despensa compartida y empezarás con una despensa vacía propia.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Salir')),
+        ],
+      ),
+    );
+    if (ok == true) await ref.read(hogarProvider.notifier).salir();
+  }
 
   Widget _tarjetaHistorial(ThemeData theme) {
     final dias = ref.watch(historialDiasProvider);
@@ -321,6 +515,8 @@ class _PantallaConfiguracionState extends ConsumerState<PantallaConfiguracion> {
             ),
           ),
         ),
+        _titulo('Cuenta y hogar'),
+        _tarjetaCuenta(theme),
         _titulo('Notificaciones'),
         _tarjetaNotificaciones(theme),
         _titulo('Historial'),

@@ -9,6 +9,8 @@ class RecetaCard extends StatelessWidget {
     required this.receta,
     this.abierta = false,
     this.onCocinar,
+    this.favorita = false,
+    this.onFavorita,
   });
 
   final Receta receta;
@@ -16,6 +18,10 @@ class RecetaCard extends StatelessWidget {
 
   /// Si se da, muestra el botón "Cocinar esta receta" que descuenta ingredientes.
   final VoidCallback? onCocinar;
+
+  /// Si se da [onFavorita], se muestra el botón de guardar en favoritas.
+  final bool favorita;
+  final VoidCallback? onFavorita;
 
   @override
   Widget build(BuildContext context) {
@@ -62,6 +68,19 @@ class RecetaCard extends StatelessWidget {
             ),
           ),
           children: [
+            if (onFavorita != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: onFavorita,
+                  icon: Icon(
+                    favorita ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                    color: favorita ? const Color(0xFFEF4444) : null,
+                    size: 20,
+                  ),
+                  label: Text(favorita ? 'En favoritas' : 'Guardar en favoritas'),
+                ),
+              ),
             if (receta.descripcion.isNotEmpty) ...[
               Text(receta.descripcion, style: theme.textTheme.bodyMedium),
               const SizedBox(height: 10),

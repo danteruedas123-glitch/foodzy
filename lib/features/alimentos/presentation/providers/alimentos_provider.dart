@@ -1,83 +1,128 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foodzy/core/fotos.dart';
+import 'package:foodzy/core/nube.dart';
 import 'package:foodzy/features/alimentos/data/alimentos_db.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
 import 'package:foodzy/features/alimentos/domain/alimentos_repository.dart';
+import 'package:foodzy/features/alimentos/domain/cantidad.dart';
 import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
 import 'package:foodzy/features/alimentos/domain/historial.dart';
+import 'package:foodzy/features/auth/presentation/providers/auth_provider.dart';
+import 'package:foodzy/features/configuracion/presentation/providers/theme_provider.dart';
+import 'package:foodzy/features/nube/data/firestore_alimentos.dart';
+import 'package:foodzy/features/nube/hogar_provider.dart';
 
-import 'package:foodzy/features/alimentos/domain/cantidad.dart';
-
-final alimentosRepositoryProvider = Provider<AlimentosRepository>((ref) {
+/// Dónde viven los alimentos: en Firestore (compartidos con el hogar) si hay
+/// cuenta en la nube, o en la base local del teléfono si no.
+final alimentosRepositoryProvider = FutureProvider<AlimentosRepository>((ref) async {
+  if (Nube.disponible && ref.watch(authProvider).esNube) {
+    final hogar = await ref.watch(hogarProvider.future);
+    if (hogar != null) return FirestoreAlimentosRepository(hogar.id);
+  }
   return AlimentosDB.instance;
 });
 
 class AlimentosNotifier extends AsyncNotifier<List<Alimento>> {
+  late AlimentosRepository _repo;
+
+  bool get _enNube => _repo is FirestoreAlimentosRepository;
+
   @override
   Future<List<Alimento>> build() async {
-    final repo = ref.read(alimentosRepositoryProvider);
-    final items = await repo.obtenerTodos();
-    
-    if (items.isEmpty) {
-      final ahora = DateTime.now();
-      final dummies = [
-        Alimento(
-          id: 'dummy_1',
-          nombre: 'Tomates Perita',
-          categoria: 'Verduras',
-          cantidad: const Cantidad(valor: 1, unidad: 'kg'),
-          fechaVencimiento: ahora.add(const Duration(days: 7)),
-          estado: Disponible(ahora),
-          fotos: ['https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=400&q=80'],
-        ),
-        Alimento(
-          id: 'dummy_2',
-          nombre: 'Leche Deslactosada',
-          categoria: 'Lácteos',
-          cantidad: const Cantidad(valor: 1, unidad: 'L'),
-          fechaVencimiento: ahora.add(const Duration(days: 20)),
-          estado: Disponible(ahora),
-          fotos: ['https://images.unsplash.com/photo-1550583724-b2692b85b150?w=400&q=80'],
-        ),
-        Alimento(
-          id: 'dummy_3',
-          nombre: 'Pan de Molde',
-          categoria: 'Panadería',
-          cantidad: const Cantidad(valor: 1, unidad: 'u'),
-          fechaVencimiento: ahora.subtract(const Duration(days: 2)), // Vencido para probar
-          estado: Disponible(ahora),
-          fotos: ['https://images.unsplash.com/photo-1598373182133-52452f7691ef?w=400&q=80'],
-        ),
-      ];
+    _repo = await ref.watch(alimentosRepositoryProvider.future);
+    final prefs = ref.read(sharedPreferencesProvider);
 
-      for (var d in dummies) {
-        await repo.guardar(d);
+    if (_repo case final FirestoreAlimentosRepository nube) {
+      var items = await nube.obtenerTodos();
+
+      // Primera vez con la cuenta: se sube lo que había en el teléfono.
+      final marca = 'migrado_${ref.read(authProvider).uid}';
+      if (items.isEmpty && !(prefs.getBool(marca) ?? false)) {
+        try {
+          final locales = await AlimentosDB.instance.obtenerTodos();
+          if (locales.isNotEmpty) {
+            await nube.guardarVarios(locales);
+            items = locales;
+          }
+        } catch (_) {
+          // Sin datos locales o sin acceso a la base local: nada que subir.
+        }
+        await prefs.setBool(marca, true);
       }
-      return repo.obtenerTodos();
+
+      // Cambios de otros miembros del hogar, en tiempo real. El primer evento
+      // es la carga inicial, que ya tenemos.
+      final sub = nube.flujo().skip(1).listen((l) => state = AsyncData(l));
+      ref.onDispose(sub.cancel);
+      return items;
     }
-    
-    return items;
+
+    final items = await _repo.obtenerTodos();
+    if (items.isNotEmpty) {
+      await prefs.setBool('semilla_demo', true);
+      return items;
+    }
+
+    // Datos de muestra solo la primera vez que se abre la app, nunca después.
+    if (prefs.getBool('semilla_demo') ?? false) return items;
+    await prefs.setBool('semilla_demo', true);
+    final ahora = DateTime.now();
+    final dummies = [
+      Alimento(
+        id: 'dummy_1',
+        nombre: 'Tomates Perita',
+        categoria: 'Verduras',
+        cantidad: const Cantidad(valor: 1, unidad: 'kg'),
+        fechaVencimiento: ahora.add(const Duration(days: 7)),
+        estado: Disponible(ahora),
+        fotos: ['https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=400&q=80'],
+      ),
+      Alimento(
+        id: 'dummy_2',
+        nombre: 'Leche Deslactosada',
+        categoria: 'Lácteos',
+        cantidad: const Cantidad(valor: 1, unidad: 'L'),
+        fechaVencimiento: ahora.add(const Duration(days: 20)),
+        estado: Disponible(ahora),
+        fotos: ['https://images.unsplash.com/photo-1550583724-b2692b85b150?w=400&q=80'],
+      ),
+      Alimento(
+        id: 'dummy_3',
+        nombre: 'Pan de Molde',
+        categoria: 'Panadería',
+        cantidad: const Cantidad(valor: 1, unidad: 'u'),
+        fechaVencimiento: ahora.subtract(const Duration(days: 2)), // Vencido para probar
+        estado: Disponible(ahora),
+        fotos: ['https://images.unsplash.com/photo-1598373182133-52452f7691ef?w=400&q=80'],
+      ),
+    ];
+    for (final d in dummies) {
+      await _repo.guardar(d);
+    }
+    return _repo.obtenerTodos();
   }
 
+  /// En local se vuelve a leer tras cada cambio; en la nube lo hace el flujo
+  /// en tiempo real, así que no hace falta.
   Future<void> recargar() async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() async {
-      return ref.read(alimentosRepositoryProvider).obtenerTodos();
-    });
+    if (_enNube) return;
+    state = await AsyncValue.guard(() => _repo.obtenerTodos());
   }
 
   Future<void> agregar(Alimento alimento) async {
-    await ref.read(alimentosRepositoryProvider).guardar(alimento);
+    await _repo.guardar(alimento);
     await recargar();
   }
 
   Future<void> actualizar(Alimento alimento) async {
-    await ref.read(alimentosRepositoryProvider).guardar(alimento);
+    await _repo.guardar(alimento);
     await recargar();
   }
 
   Future<void> eliminar(String id) async {
-    await ref.read(alimentosRepositoryProvider).eliminar(id);
+    await _repo.eliminar(id);
     await recargar();
   }
 
@@ -86,11 +131,10 @@ class AlimentosNotifier extends AsyncNotifier<List<Alimento>> {
   Future<int> eliminarVarios(Iterable<Alimento> aBorrar) async {
     final lista = aBorrar.toList();
     if (lista.isEmpty) return 0;
-    final repo = ref.read(alimentosRepositoryProvider);
     for (final a in lista) {
-      await repo.eliminar(a.id);
+      await _repo.eliminar(a.id);
     }
-    final restantes = await repo.obtenerTodos();
+    final restantes = await _repo.obtenerTodos();
     await borrarFotosHuerfanas(
       lista.expand((a) => a.fotos),
       restantes.expand((a) => a.fotos).toSet(),
@@ -126,6 +170,9 @@ enum FiltroEstado { todos, vigentes, vencidos }
 
 final filtroEstadoProvider = StateProvider<FiltroEstado>((ref) => FiltroEstado.todos);
 
+/// Filtro por dónde se guarda (nevera, congelador, alacena). null = todas.
+final filtroUbicacionProvider = StateProvider<Ubicacion?>((ref) => null);
+
 /// Alimentos que siguen en la despensa (disponibles, vigentes o vencidos).
 final despensaActivaProvider = Provider<AsyncValue<List<Alimento>>>((ref) {
   return ref.watch(alimentosProvider).whenData(
@@ -147,6 +194,7 @@ final alimentosFiltradosProvider = Provider<AsyncValue<List<Alimento>>>((ref) {
   final activos = ref.watch(despensaActivaProvider);
   final busqueda = ref.watch(searchQueryProvider).toLowerCase();
   final filtro = ref.watch(filtroEstadoProvider);
+  final ubicacion = ref.watch(filtroUbicacionProvider);
 
   return activos.whenData((alimentos) {
     final ahora = DateTime.now();
@@ -157,6 +205,7 @@ final alimentosFiltradosProvider = Provider<AsyncValue<List<Alimento>>>((ref) {
         FiltroEstado.vencidos => a.estaVencido(ahora) && !a.sinFechaVencimiento,
       };
       if (!pasa) return false;
+      if (ubicacion != null && a.ubicacion != ubicacion) return false;
       if (busqueda.isEmpty) return true;
       return a.nombre.toLowerCase().contains(busqueda) ||
           a.categoria.toLowerCase().contains(busqueda);

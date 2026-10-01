@@ -8,6 +8,7 @@ import 'package:foodzy/features/alimentos/presentation/providers/alimentos_provi
 import 'package:foodzy/features/alimentos/presentation/widgets/alimento_card.dart';
 import 'package:foodzy/features/alimentos/presentation/widgets/estado_visual.dart';
 import 'package:foodzy/features/recetas/domain/recetas_service.dart';
+import 'package:foodzy/features/recetas/presentation/recetas_estado_provider.dart';
 import 'package:foodzy/features/recetas/presentation/widgets/hoja_cocinar.dart';
 import 'package:foodzy/features/recetas/presentation/widgets/receta_card.dart';
 
@@ -71,7 +72,10 @@ class _PantallaAlertaVencimientoState
       final despensa = ref.read(alimentosProvider).value ?? const <Alimento>[];
       final r = await ref
           .read(recetasServiceProvider)
-          .generar(despensa, prioritario: a, cuantas: 3);
+          .generar(despensa,
+              prioritario: a,
+              cuantas: 3,
+              preferencias: ref.read(preferenciasProvider));
       if (!mounted) return;
       setState(() {
         _recetas = r;

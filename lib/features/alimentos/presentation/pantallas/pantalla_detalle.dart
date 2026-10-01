@@ -192,6 +192,22 @@ class PantallaDetalle extends ConsumerWidget {
                           label: const Text('Escanear o cambiar la fecha'),
                         ),
                       ),
+                    if (alimento.ubicacion != null) ...[
+                      const SizedBox(height: 16),
+                      _InfoRow(
+                        icon: Icons.place_outlined,
+                        label: 'Dónde lo guardas',
+                        value: '${alimento.ubicacion!.emoji} ${alimento.ubicacion!.etiqueta}',
+                      ),
+                    ],
+                    if (alimento.precio != null) ...[
+                      const SizedBox(height: 16),
+                      _InfoRow(
+                        icon: Icons.sell_outlined,
+                        label: 'Precio',
+                        value: '\$${fmtNum(alimento.precio!)}',
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     _InfoRow(
                       icon: Icons.info_outline,
