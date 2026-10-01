@@ -3,6 +3,23 @@ import 'package:foodzy/core/json.dart';
 import 'package:foodzy/features/alimentos/domain/cantidad.dart';
 import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
 
+/// De dónde salió la fecha de vencimiento de un alimento.
+enum FechaOrigen {
+  /// La IA la leyó impresa en el empaque.
+  leida,
+
+  /// Se calculó según el tipo de producto; es aproximada.
+  estimada,
+
+  /// La escribió o confirmó la persona.
+  manual;
+
+  static FechaOrigen desde(String? nombre) => FechaOrigen.values.firstWhere(
+        (o) => o.name == nombre,
+        orElse: () => FechaOrigen.manual,
+      );
+}
+
 /// Un alimento registrado.
 ///
 /// Es una **entidad**: tiene identidad propia. Dos alimentos con los mismos
@@ -16,6 +33,7 @@ class Alimento {
     required this.fechaVencimiento,
     required this.estado,
     this.fotos = const <String>[],
+    this.origenFecha = FechaOrigen.manual,
   });
 
   factory Alimento.fromJson(Map<String, dynamic> json) => Alimento(
@@ -26,6 +44,7 @@ class Alimento {
         fechaVencimiento: leerFecha(json, 'fechaVencimiento'),
         estado: EstadoAlimento.fromJson(leerMapa(json, 'estado')),
         fotos: leerTextos(json, 'fotos'),
+        origenFecha: FechaOrigen.desde(leerTextoOpcional(json, 'origenFecha')),
       );
 
   final String id;
@@ -35,6 +54,7 @@ class Alimento {
   final DateTime fechaVencimiento;
   final EstadoAlimento estado;
   final List<String> fotos;
+  final FechaOrigen origenFecha;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -44,6 +64,7 @@ class Alimento {
         'fechaVencimiento': fechaVencimiento.toUtc().toIso8601String(),
         'estado': estado.toJson(),
         'fotos': fotos,
+        'origenFecha': origenFecha.name,
       };
 
   // ── Reglas de negocio ───────────────────────────────────────────────────
@@ -62,8 +83,18 @@ class Alimento {
 
   bool get sinFechaVencimiento => fechaVencimiento == sinFecha;
 
-  /// Copia con otra fecha de vencimiento (ej. cuando el usuario la completa).
-  Alimento conFecha(DateTime fecha) => Alimento(
+  /// Marca interna de "este alimento no vence" (sal, azúcar, miel...).
+  static final DateTime nuncaVence = DateTime(9999, 12, 31);
+
+  bool get noVence => fechaVencimiento.year >= 9999;
+
+  /// Copia con otra fecha de vencimiento y su origen (ej. cuando la persona
+  /// la completa o la IA la lee de una foto).
+  Alimento conFecha(
+    DateTime fecha, {
+    FechaOrigen origen = FechaOrigen.manual,
+  }) =>
+      Alimento(
         id: id,
         nombre: nombre,
         categoria: categoria,
@@ -71,7 +102,11 @@ class Alimento {
         fechaVencimiento: fecha,
         estado: estado,
         fotos: fotos,
+        origenFecha: origen,
       );
+
+  /// Copia marcada como "no vence".
+  Alimento sinVencimiento() => conFecha(nuncaVence);
 
   // ── Copia ───────────────────────────────────────────────────────────────
 
@@ -90,6 +125,7 @@ class Alimento {
         fechaVencimiento: fechaVencimiento, // ni la fecha de vencimiento
         estado: estado ?? this.estado,
         fotos: fotos ?? this.fotos,
+        origenFecha: origenFecha,
       );
 
   @override
@@ -102,6 +138,7 @@ class Alimento {
           other.cantidad == cantidad &&
           other.fechaVencimiento == fechaVencimiento &&
           other.estado == estado &&
+          other.origenFecha == origenFecha &&
           listasIguales(other.fotos, fotos);
 
   @override
@@ -113,6 +150,7 @@ class Alimento {
         fechaVencimiento,
         estado,
         Object.hashAll(fotos),
+        origenFecha,
       );
 
   @override

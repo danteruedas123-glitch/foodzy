@@ -77,7 +77,7 @@ class RecetasService {
     final disponibles = despensa
         .where((a) =>
             a.estado is Disponible &&
-            (a.sinFechaVencimiento || diasParaVencer(a) >= 0))
+            (a.sinFechaVencimiento || a.noVence || diasParaVencer(a) >= 0))
         .toList();
     if (prioritario != null && !disponibles.any((a) => a.id == prioritario.id)) {
       throw const ScannerException(
@@ -96,7 +96,7 @@ class RecetasService {
               'cantidad': a.cantidad.valor,
               'unidad': a.cantidad.unidad,
               'dias_para_vencer':
-                  a.sinFechaVencimiento ? null : diasParaVencer(a),
+                  (a.sinFechaVencimiento || a.noVence) ? null : diasParaVencer(a),
             })
         .toList();
 

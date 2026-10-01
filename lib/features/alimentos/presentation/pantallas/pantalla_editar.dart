@@ -27,6 +27,8 @@ class _PantallaEditarState extends ConsumerState<PantallaEditar> {
   late TextEditingController _cantidadUnidadController;
   
   DateTime _fechaVencimiento = DateTime.now().add(const Duration(days: 7));
+  bool _noVence = false;
+  FechaOrigen _origen = FechaOrigen.manual;
   
   bool _isLoading = false;
 
@@ -40,7 +42,11 @@ class _PantallaEditarState extends ConsumerState<PantallaEditar> {
     _cantidadUnidadController = TextEditingController(text: alimento?.cantidad.unidad ?? '');
     
     if (alimento != null) {
-      _fechaVencimiento = alimento.fechaVencimiento;
+      _noVence = alimento.noVence;
+      _origen = alimento.origenFecha;
+      if (!alimento.noVence && !alimento.sinFechaVencimiento) {
+        _fechaVencimiento = alimento.fechaVencimiento;
+      }
     }
   }
 
@@ -63,6 +69,7 @@ class _PantallaEditarState extends ConsumerState<PantallaEditar> {
     if (picked != null) {
       setState(() {
         _fechaVencimiento = picked;
+        _origen = FechaOrigen.manual;
       });
     }
   }
@@ -82,7 +89,8 @@ class _PantallaEditarState extends ConsumerState<PantallaEditar> {
         valor: valorDouble,
         unidad: _cantidadUnidadController.text.trim(),
       ),
-      fechaVencimiento: _fechaVencimiento,
+      fechaVencimiento: _noVence ? Alimento.nuncaVence : _fechaVencimiento,
+      origenFecha: _origen,
       estado: widget.alimentoExistente?.estado ?? Disponible(DateTime.now()),
       fotos: widget.alimentoExistente?.fotos ?? const [],
     );
@@ -165,6 +173,13 @@ class _PantallaEditarState extends ConsumerState<PantallaEditar> {
               ],
             ),
             const SizedBox(height: 16),
+            SwitchListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              title: const Text('Este producto no vence'),
+              subtitle: const Text('Sal, azúcar, miel… no recibe avisos de vencimiento'),
+              value: _noVence,
+              onChanged: (v) => setState(() => _noVence = v),
+            ),
             ListTile(
               shape: RoundedRectangleBorder(
                 side: BorderSide(color: Colors.grey.shade400),
@@ -172,8 +187,11 @@ class _PantallaEditarState extends ConsumerState<PantallaEditar> {
               ),
               leading: const Icon(Icons.calendar_today),
               title: const Text('Fecha de Vencimiento'),
-              subtitle: Text(DateFormat.yMMMMd().format(_fechaVencimiento)),
-              onTap: _seleccionarFecha,
+              enabled: !_noVence,
+              subtitle: Text(_noVence
+                  ? 'No aplica'
+                  : DateFormat.yMMMMd().format(_fechaVencimiento)),
+              onTap: _noVence ? null : _seleccionarFecha,
               trailing: const Icon(Icons.edit),
             ),
             const SizedBox(height: 32),

@@ -24,9 +24,22 @@ int diasParaVencer(Alimento a, [DateTime? ahora]) =>
 bool venceEn(Alimento a, int dias) =>
     a.estado is Disponible &&
     !a.sinFechaVencimiento &&
+    !a.noVence &&
     diasParaVencer(a) <= dias;
 
 EstadoVisual estadoVisual(Alimento a) {
+  final base = _estadoBase(a);
+  // Una fecha estimada se marca con ≈ para que no se confunda con la impresa.
+  if (a.estado is Disponible &&
+      a.origenFecha == FechaOrigen.estimada &&
+      !a.noVence &&
+      !a.sinFechaVencimiento) {
+    return EstadoVisual('≈ ${base.texto}', base.color, base.icono);
+  }
+  return base;
+}
+
+EstadoVisual _estadoBase(Alimento a) {
   final estado = a.estado;
   if (estado is Consumido) {
     return EstadoVisual(
@@ -37,6 +50,9 @@ EstadoVisual estadoVisual(Alimento a) {
   }
   if (estado is Desechado) {
     return EstadoVisual('Desechado', const Color(0xFF78716C), Icons.delete_rounded);
+  }
+  if (a.noVence) {
+    return const EstadoVisual('No vence', Color(0xFF14B8A6), Icons.all_inclusive_rounded);
   }
   if (a.sinFechaVencimiento) {
     return const EstadoVisual('Sin fecha', Color(0xFF8B5CF6), Icons.event_busy_rounded);

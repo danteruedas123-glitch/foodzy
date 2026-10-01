@@ -7,8 +7,8 @@ import 'package:foodzy/features/alimentos/domain/alimento.dart';
 import 'package:foodzy/features/alimentos/domain/scanner_service.dart';
 import 'package:foodzy/features/alimentos/presentation/providers/alimentos_provider.dart';
 import 'package:foodzy/features/alimentos/presentation/widgets/alimento_card.dart';
+import 'package:foodzy/features/alimentos/presentation/widgets/opciones_fecha.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart';
 
 enum ModoEscaneo {
   compra('Revisión de compra', 'La IA está identificando tus alimentos...'),
@@ -77,20 +77,9 @@ class _PantallaEscaneoState extends ConsumerState<PantallaEscaneo> {
 
   Future<void> _elegirFecha(int i) async {
     final actual = _items![i];
-    final base = actual.alimento.sinFechaVencimiento
-        ? DateTime.now().add(const Duration(days: 7))
-        : actual.alimento.fechaVencimiento;
-    final f = await showDatePicker(
-      context: context,
-      initialDate: base,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 10)),
-      helpText: 'Vencimiento de ${actual.alimento.nombre}',
-    );
-    if (f == null) return;
-    setState(() {
-      _items![i] = AlimentoDetectado(alimento: actual.alimento.conFecha(f));
-    });
+    final nuevo = await editarFechaAlimento(context, ref, actual.alimento);
+    if (nuevo == null || !mounted) return;
+    setState(() => _items![i] = AlimentoDetectado(alimento: nuevo));
   }
 
   Future<void> _guardar() async {
@@ -106,6 +95,7 @@ class _PantallaEscaneoState extends ConsumerState<PantallaEscaneo> {
         fechaVencimiento: a.fechaVencimiento,
         estado: a.estado,
         fotos: [widget.imageFile.path],
+        origenFecha: a.origenFecha,
       ));
     }
     if (!mounted) return;
@@ -264,15 +254,18 @@ class _FilaDetectada extends StatelessWidget {
                   const SizedBox(height: 6),
                   ActionChip(
                     avatar: Icon(
-                      falta ? Icons.event_busy_rounded : Icons.event_available_rounded,
+                      falta
+                          ? Icons.event_busy_rounded
+                          : a.noVence
+                              ? Icons.all_inclusive_rounded
+                              : Icons.event_available_rounded,
                       size: 16,
                       color: color,
                     ),
                     label: Text(
                       falta
                           ? 'Falta la fecha — toca para ponerla'
-                          : '${item.fechaEstimada ? "≈ " : ""}Vence ${DateFormat.yMMMd().format(a.fechaVencimiento)}'
-                              '${item.fechaEstimada ? " (estimada)" : ""}',
+                          : describirFecha(a),
                       style: TextStyle(fontSize: 12, color: color),
                     ),
                     onPressed: onFecha,

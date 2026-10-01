@@ -108,7 +108,7 @@ class NotificacionesService {
 
       final ahora = tz.TZDateTime.now(tz.local);
       for (final a in alimentos) {
-        if (a.estado is! Disponible || a.sinFechaVencimiento) continue;
+        if (a.estado is! Disponible || a.sinFechaVencimiento || a.noVence) continue;
 
         final f = a.fechaVencimiento;
         final finDelDia = tz.TZDateTime(tz.local, f.year, f.month, f.day, 23, 59);
@@ -137,8 +137,12 @@ class NotificacionesService {
 
         await _plugin.zonedSchedule(
           id: a.id.hashCode & 0x3fffffff,
-          title: '⏰ ${a.nombre} está por vencerse',
-          body: '${_mayus(cuandoVence)}. Toca para decidir qué hacer con él.',
+          title: a.origenFecha == FechaOrigen.estimada
+              ? '⏰ ${a.nombre} podría estar por vencerse'
+              : '⏰ ${a.nombre} está por vencerse',
+          body: a.origenFecha == FechaOrigen.estimada
+              ? 'Según lo estimado, $cuandoVence. Toca para confirmarlo.'
+              : '${_mayus(cuandoVence)}. Toca para decidir qué hacer con él.',
           scheduledDate: cuando,
           notificationDetails: _detalles,
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,

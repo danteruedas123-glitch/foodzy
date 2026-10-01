@@ -57,6 +57,33 @@ void main() {
     });
   });
 
+  group('fecha de vencimiento', () {
+    test('el origen de la fecha sobrevive la ida y vuelta a JSON', () {
+      final a = ejemplo().conFecha(DateTime.utc(2026, 9, 1), origen: FechaOrigen.estimada);
+      final vuelta = Alimento.fromJson(jsonDecode(jsonEncode(a.toJson())) as Map<String, dynamic>);
+      expect(vuelta.origenFecha, FechaOrigen.estimada);
+      expect(vuelta, equals(a));
+    });
+
+    test('un alimento guardado antes de existir el origen se lee como manual', () {
+      final json = ejemplo().toJson()..remove('origenFecha');
+      expect(Alimento.fromJson(json).origenFecha, FechaOrigen.manual);
+    });
+
+    test('un producto que no vence nunca está vencido y sobrevive a JSON', () {
+      final a = ejemplo().sinVencimiento();
+      expect(a.noVence, isTrue);
+      expect(a.estaVencido(DateTime.utc(2100)), isFalse);
+      final vuelta = Alimento.fromJson(jsonDecode(jsonEncode(a.toJson())) as Map<String, dynamic>);
+      expect(vuelta.noVence, isTrue);
+    });
+
+    test('copyWith conserva el origen de la fecha', () {
+      final a = ejemplo().conFecha(DateTime.utc(2026, 9, 1), origen: FechaOrigen.leida);
+      expect(a.copyWith(nombre: 'Otra').origenFecha, FechaOrigen.leida);
+    });
+  });
+
   group('igualdad', () {
     test('dos alimentos con los mismos datos son iguales', () {
       expect(ejemplo(), equals(ejemplo()));

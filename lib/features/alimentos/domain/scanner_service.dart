@@ -16,18 +16,12 @@ final scannerServiceProvider = Provider<ScannerService>((ref) {
 
 /// Un alimento que la IA propone, antes de que el usuario lo confirme.
 class AlimentoDetectado {
-  const AlimentoDetectado({required this.alimento, this.fechaEstimada = false});
+  const AlimentoDetectado({required this.alimento});
 
   final Alimento alimento;
 
   /// `true` si la fecha de vencimiento no se leyó sino que se estimó.
-  final bool fechaEstimada;
-
-  AlimentoDetectado copyWith({Alimento? alimento, bool? fechaEstimada}) =>
-      AlimentoDetectado(
-        alimento: alimento ?? this.alimento,
-        fechaEstimada: fechaEstimada ?? this.fechaEstimada,
-      );
+  bool get fechaEstimada => alimento.origenFecha == FechaOrigen.estimada;
 }
 
 /// Un alimento del inventario que la cámara vio salir de la despensa.
@@ -72,6 +66,9 @@ abstract interface class ScannerService {
   /// Compara una foto del producto antes y después de usarlo y devuelve la
   /// fracción consumida (0 a 1) del contenido que tenía.
   Future<double> estimarConsumo(XFile antes, XFile despues, Alimento alimento);
+
+  /// Lee la fecha de vencimiento impresa en una foto de cerca del empaque.
+  Future<DateTime> leerFechaVencimiento(XFile imagen);
 }
 
 class GeminiScannerService implements ScannerService {
@@ -79,6 +76,17 @@ class GeminiScannerService implements ScannerService {
 
   final String apiKey;
   final GeminiClient _cliente;
+
+  static const _reglasFecha =
+      'Fecha de vencimiento, en este orden: '
+      '(a) Si el producto NO se echa a perder (sal, azúcar, miel, vinagre, especias secas, bicarbonato, agua embotellada...), '
+      'pon "no_vence": true y "fecha_vencimiento_iso": null. '
+      '(b) Si la fecha impresa en el empaque se ve con claridad, léela y pon "fecha_origen": "leida". '
+      '(c) En cualquier otro caso ESTIMA la fecha desde hoy según el tipo de producto y cuánto dura normalmente '
+      '(frescos pocos días; lácteos y embutidos semanas; pan 5 a 7 días; congelados meses; enlatados y secos 1 a 2 años; '
+      'leche UHT sellada 3 a 6 meses) y pon "fecha_origen": "estimada". '
+      'Sé conservador: ante la duda, estima una fecha más corta. '
+      'Nunca dejes la fecha en null salvo que "no_vence" sea true.';
 
   static const _reglasUnidad =
       'cantidad_unidad debe ser exactamente una de: "u", "kg", "g", "L", "ml". '
@@ -96,13 +104,12 @@ Analiza esta foto de comida o mercado. Identifica cada alimento por separado.
 Hoy es $hoy.
 
 Devuelve SOLO un arreglo JSON con objetos de esta forma:
-{"nombre": "Tomate", "categoria": "Verduras", "cantidad_valor": 3, "cantidad_unidad": "u", "fecha_vencimiento_iso": "YYYY-MM-DD" o null, "fecha_estimada": true/false}
+{"nombre": "Tomate", "categoria": "Verduras", "cantidad_valor": 3, "cantidad_unidad": "u", "fecha_vencimiento_iso": "YYYY-MM-DD" o null, "fecha_origen": "leida" o "estimada", "no_vence": false}
 
 Reglas:
 1. $_reglasUnidad
-2. Productos frescos (frutas, verduras, carnes, pan): estima la fecha desde hoy según su vida útil típica y pon "fecha_estimada": true.
-3. Productos empaquetados: si ves la fecha impresa, léela ("fecha_estimada": false). Si no se ve, pon null; no inventes fechas.
-4. Si no hay comida en la imagen, devuelve [].
+2. $_reglasFecha
+3. Si no hay comida en la imagen, devuelve [].
 ''', imagen);
     return lista.map(_aDetectado).toList();
   }
@@ -115,12 +122,12 @@ Esta imagen es una factura o ticket de supermercado. Extrae SOLO los productos c
 Hoy es $hoy.
 
 Devuelve SOLO un arreglo JSON con objetos de esta forma:
-{"nombre": "Leche entera", "categoria": "Lácteos", "cantidad_valor": 2, "cantidad_unidad": "u", "fecha_vencimiento_iso": "YYYY-MM-DD", "fecha_estimada": true}
+{"nombre": "Leche entera", "categoria": "Lácteos", "cantidad_valor": 2, "cantidad_unidad": "u", "fecha_vencimiento_iso": "YYYY-MM-DD", "fecha_origen": "estimada", "no_vence": false}
 
 Reglas:
 1. Expande abreviaturas del ticket a un nombre legible (ej. "LCHE ENT 1L" → "Leche entera 1 L").
 2. Toma la cantidad comprada de la factura y el tamaño del empaque que suele venir en el nombre (ej. "MILO 300G" → 300 "g"). $_reglasUnidad
-3. Las facturas no traen fecha de vencimiento: estímala desde hoy según el tipo de producto (fresco pocos días, lácteos semanas, enlatados meses) y pon "fecha_estimada": true.
+3. Las facturas no traen fecha de vencimiento. $_reglasFecha
 4. Si no hay productos legibles, devuelve [].
 ''', imagen);
     return lista.map(_aDetectado).toList();
@@ -227,13 +234,45 @@ Devuelve SOLO un objeto JSON: {"fraccion_consumida": 0.25}
     return lista.whereType<Map<String, dynamic>>().toList();
   }
 
+  @override
+  Future<DateTime> leerFechaVencimiento(XFile imagen) async {
+    final decodificado = await _cliente.pedir('''
+Esta es una foto de cerca de un empaque de alimento. Busca la fecha de vencimiento: puede decir
+VENCE, VENCIMIENTO, EXP, EXPIRA, BEST BEFORE, USAR ANTES DE, CONSUMIR PREFERENTEMENTE, F.V. o similar.
+Si aparecen varias fechas (producción/elaboración y vencimiento), devuelve SOLO la de vencimiento.
+Interpreta formatos como 25/12/2026, 25 DIC 26, 12-2026 o 2026-12-25. Si solo hay mes y año, usa el último día de ese mes.
+Hoy es ${_hoy()}.
+
+Devuelve SOLO un objeto JSON: {"fecha_vencimiento_iso": "YYYY-MM-DD"}
+Si no se ve ninguna fecha de vencimiento con claridad, devuelve {"fecha_vencimiento_iso": null}.
+''', imagenes: [imagen]);
+
+    final mapa = decodificado is List && decodificado.isNotEmpty
+        ? decodificado.first
+        : decodificado;
+    final fecha = mapa is Map
+        ? DateTime.tryParse(mapa['fecha_vencimiento_iso']?.toString() ?? '')
+        : null;
+    if (fecha == null) {
+      throw const ScannerException(
+          'No pude leer la fecha. Acércate más al texto, con buena luz, e inténtalo de nuevo.');
+    }
+    return fecha;
+  }
+
   AlimentoDetectado _aDetectado(Map<String, dynamic> m) {
     final ahora = DateTime.now();
-    final fecha = DateTime.tryParse(m['fecha_vencimiento_iso']?.toString() ?? '');
     final valor = (m['cantidad_valor'] as num?)?.toDouble() ?? 1.0;
 
+    final noVence = m['no_vence'] == true;
+    final fechaIa = DateTime.tryParse(m['fecha_vencimiento_iso']?.toString() ?? '');
+    final DateTime fecha =
+        noVence ? Alimento.nuncaVence : (fechaIa ?? Alimento.sinFecha);
+    final origen = (m['fecha_origen']?.toString() == 'leida')
+        ? FechaOrigen.leida
+        : FechaOrigen.estimada;
+
     return AlimentoDetectado(
-      fechaEstimada: fecha != null && m['fecha_estimada'] == true,
       alimento: Alimento(
         id: '${ahora.microsecondsSinceEpoch}-${m.hashCode}',
         nombre: m['nombre']?.toString() ?? 'Desconocido',
@@ -242,8 +281,9 @@ Devuelve SOLO un objeto JSON: {"fraccion_consumida": 0.25}
           valor: valor > 0 ? valor : 1.0,
           unidad: m['cantidad_unidad']?.toString() ?? 'u',
         ),
-        fechaVencimiento: fecha ?? Alimento.sinFecha,
+        fechaVencimiento: fecha,
         estado: Disponible(ahora),
+        origenFecha: origen,
       ),
     );
   }
