@@ -57,6 +57,22 @@ class Alimento {
 
   bool estaVencido(DateTime ahora) => tiempoRestante(ahora).isNegative;
 
+  /// Marca interna de "aún no se conoce la fecha de vencimiento".
+  static final DateTime sinFecha = DateTime(1970, 1, 1);
+
+  bool get sinFechaVencimiento => fechaVencimiento == sinFecha;
+
+  /// Copia con otra fecha de vencimiento (ej. cuando el usuario la completa).
+  Alimento conFecha(DateTime fecha) => Alimento(
+        id: id,
+        nombre: nombre,
+        categoria: categoria,
+        cantidad: cantidad,
+        fechaVencimiento: fecha,
+        estado: estado,
+        fotos: fotos,
+      );
+
   // ── Copia ───────────────────────────────────────────────────────────────
 
   Alimento copyWith({

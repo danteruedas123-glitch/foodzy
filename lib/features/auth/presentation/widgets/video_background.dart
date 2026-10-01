@@ -50,9 +50,20 @@ class _VideoBackgroundState extends State<VideoBackground> {
         } else {
            _controller.play();
         }
+      }).catchError((Object _) {
+        // Si el video no se puede reproducir, no bloqueamos la pantalla.
+        if (!_hasFinished) {
+          _hasFinished = true;
+          widget.onVideoFinished?.call();
+        }
       });
-      
+
     _controller.addListener(() {
+      if (_controller.value.hasError && !_hasFinished) {
+        _hasFinished = true;
+        widget.onVideoFinished?.call();
+        return;
+      }
       if (!_controller.value.isInitialized) return;
       
       final currentPosition = _controller.value.position;

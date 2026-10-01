@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:foodzy/core/formato.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
 import 'package:foodzy/features/alimentos/domain/cantidad.dart';
 import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
@@ -196,9 +197,7 @@ class PantallaDetalle extends ConsumerWidget {
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () async {
-                        final double step = alimento.cantidad.unidad == 'u'
-                            ? 1.0
-                            : 0.1;
+                        final double step = pasoPara(alimento.cantidad.unidad, alimento.cantidad.valor);
                         final double? consumido = await showDialog<double>(
                           context: context,
                           builder: (context) {
@@ -231,11 +230,7 @@ class PantallaDetalle extends ConsumerWidget {
                                           ),
                                           const SizedBox(width: 16),
                                           Text(
-                                            cantidad.toStringAsFixed(
-                                              alimento.cantidad.unidad == 'u'
-                                                  ? 0
-                                                  : 1,
-                                            ),
+                                            fmtNum(cantidad),
                                             style: const TextStyle(
                                               fontSize: 32,
                                               fontWeight: FontWeight.bold,
@@ -328,6 +323,7 @@ class PantallaDetalle extends ConsumerWidget {
                       onPressed: () async {
                         final nuevoEstado = Desechado(
                           'Vencido o en mal estado',
+                          fecha: DateTime.now(),
                         );
                         final actualizado = alimento.copyWith(
                           estado: nuevoEstado,

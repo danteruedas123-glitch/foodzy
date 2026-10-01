@@ -17,7 +17,6 @@ class _PantallaLoginState extends ConsumerState<PantallaLogin> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscureText = true;
-  bool _videoFinished = false;
 
   @override
   void dispose() {
@@ -66,30 +65,10 @@ class _PantallaLoginState extends ConsumerState<PantallaLogin> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // 1. Fondo limpio infinito (Se reproduce completo y repite)
+          // Fondo animado en bucle (sin presentación previa)
           const VideoBackground(
             assetPath: 'assets/videos/fondo_limpio.mp4',
             loop: true,
-          ),
-
-          // 2. Fondo de Video Original (Se corta a los 7s exactos)
-          IgnorePointer(
-            ignoring: _videoFinished,
-            child: AnimatedOpacity(
-              opacity: _videoFinished ? 0.0 : 1.0,
-              duration: const Duration(milliseconds: 300),
-              child: VideoBackground(
-                assetPath: 'assets/videos/login_video.mp4',
-                stopAtDuration: const Duration(milliseconds: 7000), // Exactamente 7 segundos
-                onVideoFinished: () {
-                  if (mounted) {
-                    setState(() {
-                      _videoFinished = true;
-                    });
-                  }
-                },
-              ),
-            ),
           ),
 
           // Capa oscura muy sutil para asegurar legibilidad
@@ -97,13 +76,8 @@ class _PantallaLoginState extends ConsumerState<PantallaLogin> {
             color: Colors.black.withValues(alpha: 0.2),
           ),
 
-          // 3. Formulario (Aparece cuando termina el video original a los 7s)
-          AnimatedOpacity(
-            opacity: _videoFinished ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 600),
-            curve: Curves.easeInOut,
-            child: _videoFinished ? _buildLoginForm(context) : const SizedBox.shrink(),
-          ),
+          // Formulario de inicio de sesión
+          _buildLoginForm(context),
         ],
       ),
     );

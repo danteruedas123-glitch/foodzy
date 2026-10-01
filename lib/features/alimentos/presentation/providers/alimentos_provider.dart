@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:foodzy/core/fotos.dart';
 import 'package:foodzy/features/alimentos/data/alimentos_db.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
 import 'package:foodzy/features/alimentos/domain/alimentos_repository.dart';
 import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
+import 'package:foodzy/features/alimentos/domain/historial.dart';
 
 import 'package:foodzy/features/alimentos/domain/cantidad.dart';
 
@@ -78,6 +80,37 @@ class AlimentosNotifier extends AsyncNotifier<List<Alimento>> {
     await ref.read(alimentosRepositoryProvider).eliminar(id);
     await recargar();
   }
+
+  /// Borra varios alimentos de una vez y limpia las fotos que queden sin uso.
+  /// Devuelve cuántos se borraron.
+  Future<int> eliminarVarios(Iterable<Alimento> aBorrar) async {
+    final lista = aBorrar.toList();
+    if (lista.isEmpty) return 0;
+    final repo = ref.read(alimentosRepositoryProvider);
+    for (final a in lista) {
+      await repo.eliminar(a.id);
+    }
+    final restantes = await repo.obtenerTodos();
+    await borrarFotosHuerfanas(
+      lista.expand((a) => a.fotos),
+      restantes.expand((a) => a.fotos).toSet(),
+    );
+    state = AsyncValue.data(restantes);
+    return lista.length;
+  }
+
+  /// Quita del historial lo consumido o desechado hace más de [dias] días.
+  /// Con [dias] == 0 no hace nada (la persona eligió conservarlo todo).
+  Future<int> limpiarHistorial(int dias) async {
+    if (dias <= 0) return 0;
+    final lista = state.value ?? await future;
+    final limite = DateTime.now().subtract(Duration(days: dias));
+    final viejos = lista.where((a) {
+      final cierre = fechaDeCierre(a);
+      return cierre != null && cierre.isBefore(limite);
+    });
+    return eliminarVarios(viejos);
+  }
 }
 
 final alimentosProvider =
@@ -87,40 +120,46 @@ final alimentosProvider =
 
 final searchQueryProvider = StateProvider<String>((ref) => '');
 
-enum FiltroEstado { todos, disponibles, vencidos, otros }
+/// Filtros de la despensa. La despensa solo muestra lo que sigue disponible;
+/// lo consumido y desechado vive en el historial.
+enum FiltroEstado { todos, vigentes, vencidos }
 
 final filtroEstadoProvider = StateProvider<FiltroEstado>((ref) => FiltroEstado.todos);
 
+/// Alimentos que siguen en la despensa (disponibles, vigentes o vencidos).
+final despensaActivaProvider = Provider<AsyncValue<List<Alimento>>>((ref) {
+  return ref.watch(alimentosProvider).whenData(
+        (lista) => lista.where((a) => a.estado is Disponible).toList(),
+      );
+});
+
+/// Lo que ya salió de la despensa, lo más reciente primero.
+final historialProvider = Provider<AsyncValue<List<Alimento>>>((ref) {
+  return ref.watch(alimentosProvider).whenData((lista) {
+    final h = lista.where(estaEnHistorial).toList()
+      ..sort((a, b) => (fechaDeCierre(b) ?? b.fechaVencimiento)
+          .compareTo(fechaDeCierre(a) ?? a.fechaVencimiento));
+    return h;
+  });
+});
+
 final alimentosFiltradosProvider = Provider<AsyncValue<List<Alimento>>>((ref) {
-  final alimentosAsync = ref.watch(alimentosProvider);
-  final searchQuery = ref.watch(searchQueryProvider).toLowerCase();
-  final filtroEstado = ref.watch(filtroEstadoProvider);
+  final activos = ref.watch(despensaActivaProvider);
+  final busqueda = ref.watch(searchQueryProvider).toLowerCase();
+  final filtro = ref.watch(filtroEstadoProvider);
 
-  return alimentosAsync.whenData((alimentos) {
-    return alimentos.where((alimento) {
-      // Filtrar por estado
-      final ahora = DateTime.now();
-      bool pasaFiltroEstado = true;
-      switch (filtroEstado) {
-        case FiltroEstado.todos:
-          break;
-        case FiltroEstado.disponibles:
-          pasaFiltroEstado = alimento.estado is Disponible && !alimento.estaVencido(ahora);
-          break;
-        case FiltroEstado.vencidos:
-          pasaFiltroEstado = alimento.estado is Disponible && alimento.estaVencido(ahora);
-          break;
-        case FiltroEstado.otros:
-          pasaFiltroEstado = alimento.estado is! Disponible;
-          break;
-      }
-
-      if (!pasaFiltroEstado) return false;
-
-      // Filtrar por búsqueda
-      if (searchQuery.isEmpty) return true;
-      return alimento.nombre.toLowerCase().contains(searchQuery) ||
-             alimento.categoria.toLowerCase().contains(searchQuery);
+  return activos.whenData((alimentos) {
+    final ahora = DateTime.now();
+    return alimentos.where((a) {
+      final pasa = switch (filtro) {
+        FiltroEstado.todos => true,
+        FiltroEstado.vigentes => !a.estaVencido(ahora) || a.sinFechaVencimiento,
+        FiltroEstado.vencidos => a.estaVencido(ahora) && !a.sinFechaVencimiento,
+      };
+      if (!pasa) return false;
+      if (busqueda.isEmpty) return true;
+      return a.nombre.toLowerCase().contains(busqueda) ||
+          a.categoria.toLowerCase().contains(busqueda);
     }).toList();
   });
 });

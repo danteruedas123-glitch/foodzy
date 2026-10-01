@@ -6,156 +6,138 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
 import 'package:foodzy/features/alimentos/domain/scanner_service.dart';
 import 'package:foodzy/features/alimentos/presentation/providers/alimentos_provider.dart';
+import 'package:foodzy/features/alimentos/presentation/widgets/alimento_card.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+enum ModoEscaneo {
+  compra('Revisión de compra', 'La IA está identificando tus alimentos...'),
+  factura('Revisión de factura', 'Leyendo los productos de tu factura...');
+
+  const ModoEscaneo(this.titulo, this.cargando);
+  final String titulo;
+  final String cargando;
+}
+
+/// Analiza una foto (compra o factura) y deja revisar y editar lo detectado
+/// antes de guardarlo en la despensa.
 class PantallaEscaneo extends ConsumerStatefulWidget {
   const PantallaEscaneo({
     super.key,
     required this.imageFile,
+    this.modo = ModoEscaneo.compra,
   });
 
   final XFile imageFile;
+  final ModoEscaneo modo;
 
   @override
   ConsumerState<PantallaEscaneo> createState() => _PantallaEscaneoState();
 }
 
 class _PantallaEscaneoState extends ConsumerState<PantallaEscaneo> {
-  List<Alimento>? _alimentosDetectados;
-  bool _isProcessing = true;
+  List<AlimentoDetectado>? _items;
+  bool _procesando = true;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _procesarImagen();
+    _procesar();
   }
 
-  Future<void> _procesarImagen() async {
+  Future<void> _procesar() async {
+    setState(() {
+      _procesando = true;
+      _error = null;
+    });
     try {
       final scanner = ref.read(scannerServiceProvider);
-      final detectados = await scanner.analizarImagen(widget.imageFile);
+      final r = widget.modo == ModoEscaneo.factura
+          ? await scanner.analizarFactura(widget.imageFile)
+          : await scanner.analizarCompra(widget.imageFile);
+      if (!mounted) return;
       setState(() {
-        _alimentosDetectados = detectados;
-        _isProcessing = false;
+        _items = r;
+        _procesando = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = e.toString();
-        _isProcessing = false;
+        _error = e is ScannerException ? e.mensaje : e.toString();
+        _procesando = false;
       });
     }
   }
 
-  bool _faltaFecha(Alimento a) => a.fechaVencimiento == DateTime(1970, 1, 1);
+  bool get _todosListos =>
+      _items != null &&
+      _items!.isNotEmpty &&
+      !_items!.any((i) => i.alimento.sinFechaVencimiento);
 
-  bool _todosListos() {
-    if (_alimentosDetectados == null || _alimentosDetectados!.isEmpty) return false;
-    return !_alimentosDetectados!.any(_faltaFecha);
-  }
-
-  Future<void> _pedirFecha(int index) async {
-    final alimento = _alimentosDetectados![index];
-    final picked = await showDatePicker(
+  Future<void> _elegirFecha(int i) async {
+    final actual = _items![i];
+    final base = actual.alimento.sinFechaVencimiento
+        ? DateTime.now().add(const Duration(days: 7))
+        : actual.alimento.fechaVencimiento;
+    final f = await showDatePicker(
       context: context,
-      initialDate: DateTime.now().add(const Duration(days: 7)),
+      initialDate: base,
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 365 * 10)),
-      helpText: 'Selecciona fecha para: ${alimento.nombre}',
+      helpText: 'Vencimiento de ${actual.alimento.nombre}',
     );
-
-    if (picked != null) {
-      setState(() {
-        _alimentosDetectados![index] = alimento.copyWith(
-          // No podemos usar copyWith para cambiar fecha de vencimiento directamente 
-          // ya que copyWith actual no permite cambiarla en la firma. 
-          // Recrearemos el objeto Alimento temporalmente.
-        );
-      });
-      // Espera, el modelo de alimento restringe la copia de identidad y fecha de vencimiento.
-      // Vamos a recrearlo.
-      setState(() {
-        _alimentosDetectados![index] = Alimento(
-          id: alimento.id,
-          nombre: alimento.nombre,
-          categoria: alimento.categoria,
-          cantidad: alimento.cantidad,
-          fechaVencimiento: picked,
-          estado: alimento.estado,
-          fotos: alimento.fotos,
-        );
-      });
-    }
+    if (f == null) return;
+    setState(() {
+      _items![i] = AlimentoDetectado(alimento: actual.alimento.conFecha(f));
+    });
   }
 
-  Future<void> _guardarTodos() async {
+  Future<void> _guardar() async {
     final notifier = ref.read(alimentosProvider.notifier);
-    
-    // Mostramos un dialog de carga
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    for (final a in _alimentosDetectados!) {
-      // Le generamos un ID real final
-      final aFinal = Alimento(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
+    var n = 0;
+    for (final d in _items!) {
+      final a = d.alimento;
+      await notifier.agregar(Alimento(
+        id: '${DateTime.now().microsecondsSinceEpoch}-${n++}',
         nombre: a.nombre,
         categoria: a.categoria,
         cantidad: a.cantidad,
         fechaVencimiento: a.fechaVencimiento,
         estado: a.estado,
-        fotos: [widget.imageFile.path], // Guardamos la foto para todos
-      );
-      await notifier.agregar(aFinal);
-      await Future.delayed(const Duration(milliseconds: 10)); // Evitar colisión de IDs
+        fotos: [widget.imageFile.path],
+      ));
     }
-
-    if (mounted) {
-      Navigator.of(context).pop(); // Cierra loading
-      Navigator.of(context).pop(); // Vuelve a la lista
-    }
+    if (!mounted) return;
+    Navigator.of(context).pop(true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Se guardaron ${_items!.length} alimentos en tu despensa.')),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Revisión Inteligente'),
-      ),
+      appBar: AppBar(title: Text(widget.modo.titulo)),
       body: Column(
         children: [
-          Container(
-            height: 150,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              image: DecorationImage(
-                image: kIsWeb 
-                    ? NetworkImage(widget.imageFile.path) 
-                    : FileImage(File(widget.imageFile.path)) as ImageProvider,
-                fit: BoxFit.cover,
-                alignment: Alignment.center,
-              ),
-            ),
-          ),
-          Expanded(
-            child: _buildContent(),
-          ),
+          _Vista(imagen: widget.imageFile),
+          Expanded(child: _contenido(theme)),
         ],
       ),
-      bottomNavigationBar: _alimentosDetectados != null && _alimentosDetectados!.isNotEmpty
+      bottomNavigationBar: (_items != null && _items!.isNotEmpty)
           ? SafeArea(
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: ElevatedButton.icon(
-                  onPressed: _todosListos() ? _guardarTodos : null,
-                  icon: const Icon(Icons.save),
-                  label: const Text('Guardar Todos', style: TextStyle(fontSize: 16)),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: FilledButton.icon(
+                  onPressed: _todosListos ? _guardar : null,
+                  icon: const Icon(Icons.check_rounded),
+                  label: Text(_todosListos
+                      ? 'Guardar ${_items!.length} alimentos'
+                      : 'Completa las fechas que faltan'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(54),
                   ),
                 ),
               ),
@@ -164,80 +146,149 @@ class _PantallaEscaneoState extends ConsumerState<PantallaEscaneo> {
     );
   }
 
-  Widget _buildContent() {
-    if (_isProcessing) {
-      return const Center(
+  Widget _contenido(ThemeData theme) {
+    if (_procesando) {
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('La IA está analizando los alimentos...'),
+            const SizedBox(
+                width: 44, height: 44, child: CircularProgressIndicator(strokeWidth: 4)),
+            const SizedBox(height: 18),
+            Text(widget.modo.cargando, style: theme.textTheme.titleSmall),
           ],
         ),
       );
     }
-
     if (_error != null) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Text('Error: $_error', style: const TextStyle(color: Colors.red)),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline_rounded,
+                  size: 52, color: theme.colorScheme.error),
+              const SizedBox(height: 12),
+              Text(_error!, textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              FilledButton.tonalIcon(
+                onPressed: _procesar,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Reintentar'),
+              ),
+            ],
+          ),
         ),
       );
     }
-
-    if (_alimentosDetectados == null || _alimentosDetectados!.isEmpty) {
-      return const Center(
-        child: Text('No se detectó ningún alimento en la foto.'),
-      );
+    if (_items!.isEmpty) {
+      return const Center(child: Text('No detecté ningún alimento en la imagen.'));
     }
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: _items!.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemBuilder: (_, i) => _FilaDetectada(
+        item: _items![i],
+        onFecha: () => _elegirFecha(i),
+        onEliminar: () => setState(() => _items!.removeAt(i)),
+      ),
+    );
+  }
+}
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(8),
-      itemCount: _alimentosDetectados!.length,
-      itemBuilder: (context, index) {
-        final a = _alimentosDetectados![index];
-        final falta = _faltaFecha(a);
+class _Vista extends StatelessWidget {
+  const _Vista({required this.imagen});
+  final XFile imagen;
 
-        return Card(
-          elevation: falta ? 4 : 1,
-          shape: RoundedRectangleBorder(
-            side: BorderSide(
-              color: falta ? Colors.red : Colors.green.shade300,
-              width: falta ? 2 : 1,
+  @override
+  Widget build(BuildContext context) {
+    final provider = kIsWeb
+        ? NetworkImage(imagen.path)
+        : FileImage(File(imagen.path)) as ImageProvider;
+    return Container(
+      height: 170,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        image: DecorationImage(image: provider, fit: BoxFit.cover),
+      ),
+    );
+  }
+}
+
+class _FilaDetectada extends StatelessWidget {
+  const _FilaDetectada({
+    required this.item,
+    required this.onFecha,
+    required this.onEliminar,
+  });
+
+  final AlimentoDetectado item;
+  final VoidCallback onFecha;
+  final VoidCallback onEliminar;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final a = item.alimento;
+    final falta = a.sinFechaVencimiento;
+    final color = falta ? theme.colorScheme.error : theme.colorScheme.primary;
+    final valor = a.cantidad.valor == a.cantidad.valor.roundToDouble()
+        ? a.cantidad.valor.toInt().toString()
+        : a.cantidad.valor.toStringAsFixed(1);
+
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: color.withValues(alpha: falta ? 0.6 : 0.2)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            FotoAlimento(alimento: a, tamano: 52),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(a.nombre,
+                      style: theme.textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w800)),
+                  Text('${a.categoria} · $valor ${a.cantidad.unidad}',
+                      style: theme.textTheme.bodySmall),
+                  const SizedBox(height: 6),
+                  ActionChip(
+                    avatar: Icon(
+                      falta ? Icons.event_busy_rounded : Icons.event_available_rounded,
+                      size: 16,
+                      color: color,
+                    ),
+                    label: Text(
+                      falta
+                          ? 'Falta la fecha — toca para ponerla'
+                          : '${item.fechaEstimada ? "≈ " : ""}Vence ${DateFormat.yMMMd().format(a.fechaVencimiento)}'
+                              '${item.fechaEstimada ? " (estimada)" : ""}',
+                      style: TextStyle(fontSize: 12, color: color),
+                    ),
+                    onPressed: onFecha,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
             ),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: ListTile(
-            leading: Icon(
-              falta ? Icons.warning_amber_rounded : Icons.check_circle_outline,
-              color: falta ? Colors.red : Colors.green,
-              size: 32,
+            IconButton(
+              tooltip: 'Quitar',
+              onPressed: onEliminar,
+              icon: const Icon(Icons.close_rounded),
             ),
-            title: Text(a.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('${a.categoria} - ${a.cantidad.valor} ${a.cantidad.unidad}'),
-                const SizedBox(height: 4),
-                if (falta)
-                  const Text('¡Falta fecha de vencimiento! Toca para ingresarla.', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))
-                else
-                  Text('Vence: ${DateFormat.yMd().format(a.fechaVencimiento)}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-              ],
-            ),
-            trailing: falta ? ElevatedButton(
-              onPressed: () => _pedirFecha(index),
-              child: const Text('Completar'),
-            ) : IconButton(
-              icon: const Icon(Icons.edit, size: 20),
-              onPressed: () => _pedirFecha(index),
-            ),
-            onTap: falta ? () => _pedirFecha(index) : null,
-          ),
-        );
-      },
+          ],
+        ),
+      ),
     );
   }
 }
