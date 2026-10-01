@@ -33,7 +33,7 @@ class HogarNotifier extends AsyncNotifier<Hogar?> {
   Future<Hogar?> build() async {
     final auth = ref.watch(authProvider);
     if (!Nube.disponible || !auth.esNube) return null;
-    return _asegurar(auth);
+    return _asegurar(auth).timeout(const Duration(seconds: 15));
   }
 
   Future<Hogar> _asegurar(AuthState auth) async {

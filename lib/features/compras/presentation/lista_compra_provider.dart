@@ -15,7 +15,8 @@ import 'package:foodzy/features/nube/hogar_provider.dart';
 final listaCompraRepositoryProvider =
     FutureProvider<ListaCompraRepository>((ref) async {
   if (Nube.disponible && ref.watch(authProvider).esNube) {
-    final hogar = await ref.watch(hogarProvider.future);
+    // Si la nube no responde (sin internet o base sin crear), se usa el teléfono.
+    final hogar = await ref.watch(hogarProvider.future).then<Hogar?>((h) => h, onError: (_) => null);
     if (hogar != null) return FirestoreListaCompraRepository(hogar.id);
   }
   return ListaCompraLocal(ref.watch(sharedPreferencesProvider));
