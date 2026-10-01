@@ -48,8 +48,8 @@ copia de seguridad, sincronización entre dispositivos y un **hogar compartido**
 6. Copia `google-services.json` a `android/app/google-services.json`.
 7. Vuelve a compilar: `flutter run`. En **Ajustes → Cuenta y hogar** debe decir que tus datos están en la nube.
 
-> `google-services.json` identifica tu proyecto, no es una contraseña, pero conviene
-> no subirlo a un repositorio público. Está en el `.gitignore`.
+> `google-services.json` ya viene en el repositorio (identifica el proyecto, no es una contraseña),
+> así que al clonar la nube funciona sin más. No hagas público el repositorio.
 
 Para iOS hay que añadir también `GoogleService-Info.plist` (ver la documentación de FlutterFire).
 
