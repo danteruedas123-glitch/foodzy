@@ -245,6 +245,7 @@ class RecetasService {
     List<Alimento> despensa, {
     Alimento? prioritario,
     int cuantas = 3,
+    String? momento,
     PreferenciasCulinarias preferencias = const PreferenciasCulinarias(),
   }) async {
     // Por seguridad, la comida ya vencida nunca entra en las recetas.
@@ -269,7 +270,7 @@ ${_catalogo(disponibles)}
 
 ${preferencias.paraPrompt()}
 Crea $cuantas recetas distintas, realistas y fáciles de hacer en casa.
-$foco
+${momento == null ? '' : 'Todas las recetas deben ser apropiadas para el ${momento.toUpperCase()} (plato típico de esa comida del día).\n'}$foco
 
 Reglas:
 0. Todos los alimentos del inventario están vigentes (ninguno vencido).

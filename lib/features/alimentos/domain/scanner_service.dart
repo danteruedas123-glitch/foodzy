@@ -128,7 +128,7 @@ Reglas:
 2. $_reglasFecha
 3. Si no hay comida en la imagen, devuelve [].
 ''', imagen);
-    return lista.map(_aDetectado).toList();
+    return _sinRepetidos(lista).map(_aDetectado).toList();
   }
 
   @override
@@ -145,9 +145,26 @@ Reglas:
 1. Expande abreviaturas del ticket a un nombre legible (ej. "LCHE ENT 1L" → "Leche entera 1 L").
 2. Pon en "precio_total" lo que costó ese renglón (el total de la línea, número sin símbolo ni separador de miles; null si no se lee). Toma la cantidad comprada de la factura y el tamaño del empaque que suele venir en el nombre (ej. "MILO 300G" → 300 "g"). $_reglasUnidad
 3. Las facturas no traen fecha de vencimiento. $_reglasFecha
-4. Si no hay productos legibles, devuelve [].
+4. Lista cada renglón de la factura UNA sola vez. Si un producto aparece en varios renglones o con cantidad mayor a 1, devuélvelo en un solo objeto con la cantidad sumada. Nunca repitas objetos idénticos.
+5. Si no hay productos legibles, devuelve [].
 ''', imagen);
-    return lista.map(_aDetectado).toList();
+    return _sinRepetidos(lista).map(_aDetectado).toList();
+  }
+
+  /// La IA a veces repite el mismo renglón varias veces; se descartan las
+  /// copias idénticas (mismo nombre, cantidad, unidad y precio).
+  List<Map<String, dynamic>> _sinRepetidos(List<Map<String, dynamic>> lista) {
+    final vistos = <String>{};
+    return [
+      for (final m in lista)
+        if (vistos.add([
+          m['nombre']?.toString().trim().toLowerCase(),
+          m['cantidad_valor'],
+          m['cantidad_unidad'],
+          m['precio_total'],
+        ].join('|')))
+          m,
+    ];
   }
 
   @override

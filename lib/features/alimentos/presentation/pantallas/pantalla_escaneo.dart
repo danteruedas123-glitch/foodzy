@@ -108,18 +108,33 @@ class _PantallaEscaneoState extends ConsumerState<PantallaEscaneo> {
     }
   }
 
+  bool _guardando = false;
+
   Future<void> _guardar() async {
+    // Evita guardar dos veces si se toca el botón repetido.
+    if (_guardando) return;
+    _guardando = true;
     final notifier = ref.read(alimentosProvider.notifier);
     var n = 0;
     final base = DateTime.now().microsecondsSinceEpoch;
-    for (final d in _items!) {
-      await notifier.agregar(
-        d.alimento.conIdYFotos('$base-${n++}', [widget.imageFile.path]),
-      );
+    try {
+      for (final d in _items!) {
+        await notifier.agregar(
+          d.alimento.conIdYFotos('$base-${n++}', [widget.imageFile.path]),
+        );
+      }
+      // Marcar la lista de compras es secundario: no debe dejar la pantalla esperando.
+      await ref
+          .read(listaCompraProvider.notifier)
+          .marcarCompradosPorNombre(_items!.map((d) => d.alimento.nombre))
+          .timeout(const Duration(seconds: 3), onTimeout: () => 0);
+    } catch (e) {
+      _guardando = false;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('No se pudo guardar: $e')));
+      return;
     }
-    await ref
-        .read(listaCompraProvider.notifier)
-        .marcarCompradosPorNombre(_items!.map((d) => d.alimento.nombre));
     if (!mounted) return;
     Navigator.of(context).pop(true);
     ScaffoldMessenger.of(context).showSnackBar(

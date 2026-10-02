@@ -20,13 +20,25 @@ class RecetasNotifier extends Notifier<AsyncValue<List<Receta>>?> {
     state = const AsyncValue.loading();
     final despensa = ref.read(alimentosProvider).value ?? const <Alimento>[];
     final prefs = ref.read(preferenciasProvider);
+    final momento = ref.read(momentoProvider);
     state = await AsyncValue.guard(
       () => ref
           .read(recetasServiceProvider)
-          .generar(despensa, cuantas: 4, preferencias: prefs),
+          .generar(despensa, cuantas: 4, momento: momento, preferencias: prefs),
     );
   }
 }
+
+/// Comida del día para la que se piden recetas; `null` = cualquiera.
+class MomentoNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void elegir(String? momento) => state = momento;
+}
+
+final momentoProvider =
+    NotifierProvider<MomentoNotifier, String?>(MomentoNotifier.new);
 
 final recetasProvider =
     NotifierProvider<RecetasNotifier, AsyncValue<List<Receta>>?>(
@@ -118,14 +130,45 @@ class _Sugeridas extends ConsumerWidget {
         .where((a) => a.estado is Disponible)
         .toList();
     final urgentes = despensa.where((a) => venceEn(a, 3)).length;
+    final momento = ref.watch(momentoProvider);
 
     return SliverMainAxisGroup(
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Wrap(
+              spacing: 8,
+              children: [
+                for (final m in const [
+                  (null, 'Cualquiera', '🍽️'),
+                  ('Desayuno', 'Desayuno', '🥐'),
+                  ('Almuerzo', 'Almuerzo', '☀️'),
+                  ('Cena', 'Cena', '🌙'),
+                ])
+                  ChoiceChip(
+                    label: Text('${m.$3} ${m.$2}'),
+                    selected: momento == m.$1,
+                    onSelected: estado is AsyncLoading
+                        ? null
+                        : (_) {
+                            ref.read(momentoProvider.notifier).elegir(m.$1);
+                            if (despensa.isNotEmpty) {
+                              ref.read(recetasProvider.notifier).generar();
+                            }
+                          },
+                  ),
+              ],
+            ),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: _Cabecera(
-              titulo: '¿Qué cocino hoy?',
+              titulo: momento == null
+                  ? '¿Qué cocino hoy?'
+                  : '¿Qué preparo para el ${momento.toLowerCase()}?',
               texto: despensa.isEmpty
                   ? 'Añade alimentos a tu despensa para recibir ideas.'
                   : urgentes > 0

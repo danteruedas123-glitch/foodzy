@@ -113,16 +113,42 @@ class AlimentosNotifier extends AsyncNotifier<List<Alimento>> {
   }
 
   Future<void> agregar(Alimento alimento) async {
+    if (_enNube) {
+      // Sin esperar al servidor: con mala señal el guardado en cadena (una
+      // factura con varios productos) se quedaba trabado en el primero.
+      final actual = state.value ?? const <Alimento>[];
+      state = AsyncData([...actual.where((a) => a.id != alimento.id), alimento]);
+      unawaited(_repo.guardar(alimento).catchError((_) {}));
+      return;
+    }
     await _repo.guardar(alimento);
     await recargar();
   }
 
   Future<void> actualizar(Alimento alimento) async {
+    if (_enNube) {
+      // El cambio se ve al instante; Firestore confirma después (con mala
+      // señal la espera por el servidor dejaba la pantalla "congelada").
+      final actual = state.value;
+      if (actual != null) {
+        state = AsyncData([for (final a in actual) a.id == alimento.id ? alimento : a]);
+      }
+      unawaited(_repo.guardar(alimento).catchError((_) {}));
+      return;
+    }
     await _repo.guardar(alimento);
     await recargar();
   }
 
   Future<void> eliminar(String id) async {
+    if (_enNube) {
+      final actual = state.value;
+      if (actual != null) {
+        state = AsyncData(actual.where((a) => a.id != id).toList());
+      }
+      unawaited(_repo.eliminar(id).catchError((_) {}));
+      return;
+    }
     await _repo.eliminar(id);
     await recargar();
   }
