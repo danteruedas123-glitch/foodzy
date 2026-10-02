@@ -11,12 +11,21 @@ class ScannerException implements Exception {
   String toString() => mensaje;
 }
 
+/// Cupo de usos de IA (plan gratuito): se verifica antes de pedir y se
+/// registra solo si la IA respondió.
+class CuotaIA {
+  const CuotaIA({required this.verificar, required this.registrar});
+  final void Function() verificar;
+  final Future<void> Function() registrar;
+}
+
 /// Cliente común de Gemini: prueba una cadena de modelos con reintentos y
 /// devuelve el JSON ya decodificado. Lo usan el escáner y las recetas.
 class GeminiClient {
-  GeminiClient({required this.apiKey});
+  GeminiClient({required this.apiKey, this.cuota});
 
   final String apiKey;
+  final CuotaIA? cuota;
 
   Future<dynamic> pedir(String prompt, {List<XFile> imagenes = const []}) async {
     if (apiKey.trim().isEmpty) {
@@ -24,6 +33,8 @@ class GeminiClient {
         'Falta la API Key de Gemini. Pégala en Ajustes → Inteligencia artificial.',
       );
     }
+
+    cuota?.verificar();
 
     final partes = <Part>[TextPart(prompt)];
     for (final img in imagenes) {
@@ -90,7 +101,9 @@ class GeminiClient {
     }
 
     try {
-      return jsonDecode(_limpiar(texto));
+      final resultado = jsonDecode(_limpiar(texto));
+      await cuota?.registrar();
+      return resultado;
     } catch (_) {
       throw ScannerException('No pude entender la respuesta de la IA:\n$texto');
     }

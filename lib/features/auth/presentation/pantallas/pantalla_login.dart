@@ -62,6 +62,19 @@ class _PantallaLoginState extends ConsumerState<PantallaLogin> {
     }
   }
 
+  Future<void> _handleGoogle() async {
+    setState(() => _isLoading = true);
+    try {
+      await ref.read(authProvider.notifier).loginConGoogle();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _handleLogin() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
@@ -227,6 +240,31 @@ class _PantallaLoginState extends ConsumerState<PantallaLogin> {
                       ),
               ),
             ),
+            if (Nube.disponible) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: OutlinedButton.icon(
+                  onPressed: _isLoading ? null : _handleGoogle,
+                  icon: const Icon(Icons.account_circle_outlined),
+                  label: Text(
+                    'Continuar con Google',
+                    style: GoogleFonts.quicksand(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: BorderSide(color: Colors.white.withValues(alpha: 0.6)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(28),
+                    ),
+                  ),
+                ),
+              ),
+            ],
             if (Nube.disponible)
               TextButton(
                 onPressed: _recuperarContrasena,

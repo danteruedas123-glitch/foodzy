@@ -48,6 +48,13 @@ class _PantallaRegistroState extends ConsumerState<PantallaRegistro> {
       return;
     }
 
+    if (password.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('La contraseña debe tener al menos 6 caracteres.')),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
       await ref.read(authProvider.notifier).register(name, email, password);

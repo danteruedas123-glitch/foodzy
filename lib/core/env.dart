@@ -13,4 +13,19 @@ class Env {
     'gemini-3.6-flash',
     'gemini-3.1-flash-lite',
   ];
+
+  /// Claves públicas de RevenueCat (Project settings → API keys):
+  /// `--dart-define=REVENUECAT_ANDROID_KEY=goog_xxx`
+  /// `--dart-define=REVENUECAT_IOS_KEY=appl_xxx`
+  static const String revenueCatAndroidKey =
+      String.fromEnvironment('REVENUECAT_ANDROID_KEY');
+  static const String revenueCatIosKey =
+      String.fromEnvironment('REVENUECAT_IOS_KEY');
+
+  /// Compras de mentira (no cobran nada) para probar Premium en tu celular:
+  /// `--dart-define=COMPRAS_PRUEBA=true`. NO activar en la versión publicada.
+  static const bool comprasDePrueba = bool.fromEnvironment('COMPRAS_PRUEBA');
+
+  /// Nombre del "entitlement" que se crea en RevenueCat para Premium.
+  static const String revenueCatEntitlement = 'premium';
 }

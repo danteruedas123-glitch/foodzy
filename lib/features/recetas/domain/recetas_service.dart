@@ -6,9 +6,13 @@ import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
 import 'package:foodzy/features/alimentos/domain/gemini_client.dart';
 import 'package:foodzy/features/alimentos/presentation/widgets/estado_visual.dart';
 import 'package:foodzy/features/configuracion/presentation/providers/api_key_provider.dart';
+import 'package:foodzy/features/premium/premium_provider.dart';
 
 final recetasServiceProvider = Provider<RecetasService>((ref) {
-  return RecetasService(GeminiClient(apiKey: ref.watch(apiKeyProvider)));
+  return RecetasService(GeminiClient(
+    apiKey: ref.watch(apiKeyProvider),
+    cuota: ref.watch(cuotaIAProvider),
+  ));
 });
 
 /// Gustos y restricciones de la persona al cocinar.

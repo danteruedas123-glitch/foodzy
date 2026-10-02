@@ -12,7 +12,20 @@
           "package_name": "com.example.foodzy"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "235830420548-q8r3q7jn3r3vqltf1alv3ljp0m1j93r1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.foodzy",
+            "certificate_hash": "64eebf483efb4d3653364fee8451387fae18a06d"
+          }
+        },
+        {
+          "client_id": "235830420548-b0enkgidpmbrnhittv43ip4l4lrsin4o.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAt6SlefFLBJLglMNkzojQ-KZMhC8CFXIQ"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "235830420548-b0enkgidpmbrnhittv43ip4l4lrsin4o.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

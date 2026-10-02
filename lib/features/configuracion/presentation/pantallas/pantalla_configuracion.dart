@@ -13,6 +13,8 @@ import 'package:foodzy/features/configuracion/presentation/providers/historial_a
 import 'package:foodzy/features/configuracion/presentation/providers/notificaciones_provider.dart';
 import 'package:foodzy/features/configuracion/presentation/providers/api_key_provider.dart';
 import 'package:foodzy/features/configuracion/presentation/providers/theme_provider.dart';
+import 'package:foodzy/features/premium/pantalla_premium.dart';
+import 'package:foodzy/features/premium/premium_provider.dart';
 
 /// Ajustes: apariencia, clave de la IA y sesión. Sirve como pestaña o como
 /// pantalla independiente.
@@ -111,7 +113,17 @@ class _PantallaConfiguracionState extends ConsumerState<PantallaConfiguracion> {
       const Divider(height: 28),
       hogar.when(
         loading: () => const Center(child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator())),
-        error: (e, _) => Text('No se pudo cargar el hogar: $e'),
+        error: (e, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('No se pudo cargar el hogar: $e'),
+            TextButton.icon(
+              onPressed: () => ref.invalidate(hogarProvider),
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Reintentar'),
+            ),
+          ],
+        ),
         data: (h) {
           if (h == null) return const SizedBox.shrink();
           return Column(
@@ -250,6 +262,33 @@ class _PantallaConfiguracionState extends ConsumerState<PantallaConfiguracion> {
       ),
     );
     if (ok == true) await ref.read(hogarProvider.notifier).salir();
+  }
+
+  Widget _tarjetaPremium(ThemeData theme) {
+    final p = ref.watch(premiumProvider);
+    final cs = theme.colorScheme;
+    return Card(
+      elevation: 0,
+      color: cs.primaryContainer,
+      child: ListTile(
+        leading: Icon(Icons.workspace_premium, color: cs.onPrimaryContainer),
+        title: Text(
+          p.premium ? 'Foodzy Premium' : 'Hazte Premium',
+          style: TextStyle(
+              fontWeight: FontWeight.w800, color: cs.onPrimaryContainer),
+        ),
+        subtitle: Text(
+          p.premium
+              ? 'IA sin límite activada'
+              : 'Te quedan ${p.restantes} de $limiteIAGratis usos de IA este mes',
+          style: TextStyle(color: cs.onPrimaryContainer),
+        ),
+        trailing: Icon(Icons.chevron_right, color: cs.onPrimaryContainer),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const PantallaPremium()),
+        ),
+      ),
+    );
   }
 
   Widget _tarjetaHistorial(ThemeData theme) {
@@ -445,6 +484,8 @@ class _PantallaConfiguracionState extends ConsumerState<PantallaConfiguracion> {
             ),
           ],
         ),
+        const SizedBox(height: 16),
+        _tarjetaPremium(theme),
         _titulo('Inteligencia artificial'),
         Card(
           elevation: 0,

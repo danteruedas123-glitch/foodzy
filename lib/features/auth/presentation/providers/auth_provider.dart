@@ -1,3 +1,4 @@
+import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -116,6 +117,37 @@ class AuthNotifier extends Notifier<AuthState> {
     await prefs.setBool(_authKey, true);
     await prefs.setString(_userNameKey, email.split('@').first);
     state = AuthState(isAuthenticated: true, userName: email.split('@').first);
+  }
+
+  bool _googleListo = false;
+
+  /// Entra (o crea la cuenta) con Google. Solo modo nube.
+  /// Devuelve `false` si la persona cerró la ventana sin elegir cuenta.
+  Future<bool> loginConGoogle() async {
+    if (!Nube.disponible) {
+      throw const AuthError('Entrar con Google requiere el modo nube.');
+    }
+    try {
+      final google = GoogleSignIn.instance;
+      if (!_googleListo) {
+        await google.initialize();
+        _googleListo = true;
+      }
+      final cuenta = await google.authenticate();
+      final idToken = cuenta.authentication.idToken;
+      if (idToken == null) {
+        throw const AuthError('Google no devolvió las credenciales. Intenta de nuevo.');
+      }
+      await FirebaseAuth.instance.signInWithCredential(
+        GoogleAuthProvider.credential(idToken: idToken),
+      );
+      return true;
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) return false;
+      throw AuthError('No se pudo entrar con Google (${e.code.name}).');
+    } on FirebaseAuthException catch (e) {
+      throw AuthError(_traducir(e));
+    }
   }
 
   Future<void> register(String name, String email, String password) async {
