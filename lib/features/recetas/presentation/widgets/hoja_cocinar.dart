@@ -6,6 +6,7 @@ import 'package:foodzy/features/alimentos/domain/cantidad.dart';
 import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
 import 'package:foodzy/features/alimentos/presentation/providers/alimentos_provider.dart';
 import 'package:foodzy/features/alimentos/presentation/widgets/alimento_card.dart';
+import 'package:foodzy/features/recetas/domain/descuento_receta.dart';
 import 'package:foodzy/features/recetas/domain/recetas_service.dart';
 
 /// Pregunta si se va a cocinar la receta y, si se acepta, descuenta de la
@@ -53,24 +54,11 @@ class _HojaCocinarState extends ConsumerState<_HojaCocinar> {
         if (a.estado is Disponible) a.id: a,
     };
 
-    // Si dos ingredientes salen del mismo alimento, se suman.
-    final sumas = <String, double>{};
-    final sinMedir = <String>[];
-    for (final i in widget.receta.ingredientes) {
-      final a = i.alimentoId == null ? null : despensa[i.alimentoId];
-      if (a == null) continue;
-      final usada = i.cantidadUsada;
-      if (usada == null || usada <= 0) {
-        sinMedir.add(i.nombre);
-        continue;
-      }
-      sumas[a.id] = (sumas[a.id] ?? 0) + usada;
-    }
+    final descuento = calcularDescuento(widget.receta, despensa);
     _lineas = [
-      for (final e in sumas.entries)
-        _Linea(despensa[e.key]!, e.value.clamp(0.0, despensa[e.key]!.cantidad.valor).toDouble()),
+      for (final d in descuento.lineas) _Linea(d.alimento, d.cantidad),
     ];
-    _sinMedir = sinMedir;
+    _sinMedir = descuento.sinMedir;
   }
 
   void _poner(_Linea l, double v) {
