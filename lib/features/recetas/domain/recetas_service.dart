@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
 import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
@@ -285,7 +286,7 @@ Devuelve SOLO un arreglo JSON con objetos de esta forma:
 $_formatoReceta
 ''');
 
-    final recetas = _parsear(json, {for (final a in disponibles) a.id: a});
+    final recetas = parsear(json, {for (final a in disponibles) a.id: a});
     if (recetas.isEmpty) {
       throw const ScannerException(
           'No pude armar recetas con tu despensa. Intenta de nuevo.');
@@ -350,14 +351,17 @@ $_reglasIngredientes
 Devuelve SOLO un objeto JSON con esta forma:
 $_formatoReceta
 ''');
-    final recetas = _parsear(json, {for (final a in disponibles) a.id: a});
+    final recetas = parsear(json, {for (final a in disponibles) a.id: a});
     if (recetas.isEmpty) {
       throw const ScannerException('No pude armar esa receta. Intenta de nuevo.');
     }
     return recetas.first;
   }
 
-  List<Receta> _parsear(dynamic json, Map<String, Alimento> porId) {
+  /// Convierte la respuesta de la IA en recetas válidas. Es pública solo para
+  /// poder probarla; la app la usa a través de [generar] y [detallar].
+  @visibleForTesting
+  List<Receta> parsear(dynamic json, Map<String, Alimento> porId) {
     final lista = json is List ? json : [json];
     final recetas = <Receta>[];
     for (final r in lista) {
