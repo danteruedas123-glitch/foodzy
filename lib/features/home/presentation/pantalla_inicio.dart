@@ -14,6 +14,8 @@ import 'package:foodzy/features/alimentos/presentation/widgets/alimento_card.dar
 import 'package:foodzy/features/alimentos/presentation/widgets/estado_visual.dart';
 import 'package:foodzy/features/auth/presentation/providers/auth_provider.dart';
 import 'package:foodzy/features/compras/presentation/pantalla_lista_compra.dart';
+import 'package:foodzy/features/premium/insignias_premium.dart';
+import 'package:foodzy/features/premium/premium_provider.dart';
 
 /// Pestaña "Inicio": resumen, accesos rápidos y lo que vence pronto.
 class PantallaInicio extends ConsumerWidget {
@@ -37,6 +39,7 @@ class PantallaInicio extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final nombre = ref.watch(authProvider).userName ?? 'chef';
+    final premium = ref.watch(premiumProvider.select((p) => p.premium));
     final async = ref.watch(alimentosProvider);
 
     final lista = async.value ?? const <Alimento>[];
@@ -74,12 +77,31 @@ class PantallaInicio extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${_saludo()},',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(color: theme.colorScheme.onPrimary.withValues(alpha: 0.85))),
-                Text(nombre,
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                        color: theme.colorScheme.onPrimary, fontWeight: FontWeight.w900)),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${_saludo()},',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                  color: theme.colorScheme.onPrimary
+                                      .withValues(alpha: 0.85))),
+                          Text(nombre,
+                              style: theme.textTheme.headlineMedium?.copyWith(
+                                  color: theme.colorScheme.onPrimary,
+                                  fontWeight: FontWeight.w900)),
+                          if (premium) ...[
+                            const SizedBox(height: 6),
+                            const InsigniaPremium(),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const AvatarUsuario(radio: 26),
+                  ],
+                ),
                 const SizedBox(height: 22),
                 Row(
                   children: [
