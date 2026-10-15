@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:foodzy/features/compras/presentation/lista_compra_provider.dart';
 import 'package:foodzy/features/recetas/domain/recetas_service.dart';
 
 /// Tarjeta desplegable con una receta: ingredientes (de la despensa o por
 /// conseguir) y pasos numerados.
-class RecetaCard extends StatelessWidget {
+class RecetaCard extends ConsumerWidget {
   const RecetaCard({
     super.key,
     required this.receta,
@@ -23,8 +25,31 @@ class RecetaCard extends StatelessWidget {
   final bool favorita;
   final VoidCallback? onFavorita;
 
+  /// Pasa a la lista de compras lo que la receta necesita y no hay en casa.
+  Future<void> _anadirFaltantes(BuildContext context, WidgetRef ref) async {
+    final mensajero = ScaffoldMessenger.of(context);
+    String mensaje;
+    try {
+      final nuevos = await ref.read(listaCompraProvider.notifier).agregarVarios([
+        for (final i in receta.faltantes)
+          (
+            nombre: i.nombre,
+            cantidad: i.cantidad.trim().isEmpty ? null : i.cantidad.trim(),
+          ),
+      ]);
+      mensaje = switch (nuevos) {
+        0 => 'Todo eso ya estaba en tu lista de compras.',
+        1 => 'Añadí 1 producto a tu lista de compras.',
+        _ => 'Añadí $nuevos productos a tu lista de compras.',
+      };
+    } catch (_) {
+      mensaje = 'No pude añadirlo a la lista. Revisa tu conexión e intenta de nuevo.';
+    }
+    mensajero.showSnackBar(SnackBar(content: Text(mensaje)));
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final faltan = receta.faltantes;
@@ -147,6 +172,18 @@ class RecetaCard extends StatelessWidget {
                   ],
                 ),
               ),
+            if (faltan.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => _anadirFaltantes(context, ref),
+                icon: const Icon(Icons.add_shopping_cart_rounded),
+                label: Text(faltan.length == 1
+                    ? 'Añadir lo que falta a mi lista'
+                    : 'Añadir lo que falta a mi lista (${faltan.length})'),
+                style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(46)),
+              ),
+            ],
             const SizedBox(height: 14),
             Text('Preparación',
                 style: theme.textTheme.titleSmall
