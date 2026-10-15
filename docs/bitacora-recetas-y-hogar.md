@@ -31,6 +31,9 @@ hicieron.
 | 2026-10-15 | d15edde | Pruebas de `parsear` y de la ida y vuelta a JSON de `Receta` | `test/domain/recetas_parsear_test.dart` | La lectura de la respuesta de Gemini no tenía ninguna prueba | `flutter test test/domain/recetas_parsear_test.dart` |
 | 2026-10-15 | 657fd71 | Se crea esta bitácora con el alcance del área y los dos primeros cambios | `docs/bitacora-recetas-y-hogar.md` | Dejar constancia de qué se hace, dónde y por qué | Leer este archivo |
 | 2026-10-15 | ec6dd75 | El cálculo de qué se descuenta al cocinar sale del widget a una función `calcularDescuento`; `hoja_cocinar.dart` ahora la usa. El comportamiento no cambia | `lib/features/recetas/domain/descuento_receta.dart`, `lib/features/recetas/presentation/widgets/hoja_cocinar.dart` | La lógica estaba dentro de `initState` de una pantalla y no se podía probar | `flutter test`; cocinar una receta en la app y ver que se descuenta igual |
+| 2026-10-15 | 9762f57 | **Nueva función:** botón "Añadir lo que falta a mi lista" en cada receta que tiene ingredientes por conseguir. Pasa esos ingredientes (con su cantidad) a la lista de compras, omite los que ya están, y avisa cuántos añadió. Funciona en Sugeridas, Favoritas, Semana y en la alerta de vencimiento porque vive en la tarjeta de receta | `lib/features/recetas/presentation/widgets/receta_card.dart`, `lib/features/compras/presentation/lista_compra_provider.dart` | Las recetas mostraban lo que faltaba solo como texto; la persona tenía que copiarlo a mano a la lista. Si hay hogar compartido, la lista la ve toda la familia | Generar recetas con productos que no tengas, abrir una y tocar el botón; ir a Lista de compras y ver los productos. Tocarlo otra vez: debe decir que ya estaban |
+| 2026-10-15 | 9762f57 | `ListaCompraNotifier.agregar` ahora devuelve `true` si añadió el producto; nuevo `agregarVarios`; los ids de producto se generan siempre distintos | `lib/features/compras/presentation/lista_compra_provider.dart` | Poder contar cuántos eran nuevos y evitar ids repetidos al añadir varios seguidos | `flutter test test/domain/lista_compra_agregar_test.dart` |
+| 2026-10-15 | 9762f57 | Pruebas de `agregarVarios` | `test/domain/lista_compra_agregar_test.dart` | La lista de compras no tenía pruebas | `flutter test test/domain/lista_compra_agregar_test.dart` |
 | 2026-10-15 | ec6dd75 | Pruebas de `calcularDescuento` | `test/domain/descuento_receta_test.dart` | El descuento de la despensa no tenía pruebas | `flutter test test/domain/descuento_receta_test.dart` |
 
 ## Pruebas automáticas del área
@@ -39,6 +42,7 @@ hicieron.
 | --- | --- | --- |
 | `test/domain/recetas_parsear_test.dart` | Receta válida; objeto único en vez de lista; `alimento_id` inventado; cantidad usada limitada a lo disponible; cantidades 0/negativas/nulas; recetas sin ingredientes o pasos; elementos que no son objetos; valores por defecto; respuesta vacía; JSON de ida y vuelta | 11 pruebas, todas pasan |
 | `test/domain/descuento_receta_test.dart` | Descuento por ingrediente; suma de ingredientes del mismo alimento; tope en lo disponible; ingredientes sin cantidad medible; ingredientes que no son de la despensa; receta vacía | 6 pruebas, todas pasan |
+| `test/domain/lista_compra_agregar_test.dart` | Añadir varios; no repetir lo que ya está; ignorar mayúsculas y tildes; volver a añadir lo ya comprado; no repetir dentro del mismo lote; nombres vacíos; ids distintos | 7 pruebas, todas pasan |
 
 Para correrlas: `flutter test`. Para revisar el código: `flutter analyze`.
 
