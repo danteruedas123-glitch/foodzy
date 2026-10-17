@@ -39,6 +39,8 @@ hicieron.
 | 2026-10-15 | 46bedc0 | **Arreglo en `unirse`:** si falla algo después de entrar al hogar nuevo (copiar la despensa o guardar el hogar), se deshace la entrada y se muestra "No pude unirte al hogar. Todo quedó como estaba". Antes la persona quedaba como miembro de los dos hogares | `lib/features/nube/hogar.dart` | Evitar un estado a medias: figurar en un hogar ajeno sin haberse unido de verdad | Pruebas "si falla la copia" y "si falla guardar su hogar nuevo" |
 | 2026-10-15 | 46bedc0 | **Arreglo en `salir`:** si la persona es la única del hogar, no hace nada. Antes creaba un hogar nuevo y dejaba el anterior abandonado | `lib/features/nube/hogar.dart` | No dejar hogares huérfanos. La pantalla ya ocultaba el botón en ese caso, pero la función no se protegía sola | Prueba "si es la única persona del hogar" |
 | 2026-10-15 | 46bedc0 | Pruebas del servicio del hogar | `test/domain/hogar_service_test.dart` | La lógica del hogar no tenía ninguna prueba | `flutter test test/domain/hogar_service_test.dart` |
+| 2026-10-16 | 14fbc66 | **Reglas de seguridad del hogar más estrictas.** Crear: solo un hogar propio y quedando como dueño. Cambiar: solo la lista de miembros, y solo de tres formas (una persona se une a un hogar con gente, una persona sale, o el dueño quita a otra). Antes cualquier miembro podía reescribir los miembros y el código, y se podía unir alguien a un hogar vacío | `firestore.rules` | Evitar que un miembro pueda meter o sacar gente a su gusto, cambiar el código o quedarse con un hogar | `firestore-tests`: 30 de 30 pasan con las reglas nuevas; con las viejas pasaban 19 de 30 |
+| 2026-10-16 | 14fbc66 | Pruebas de las reglas con el emulador de Firestore (Node) | `firestore-tests/` (`pruebas.js`, `package.json`, `firebase.json`, `README.md`) y `.gitignore` | Las reglas no se podían probar y un error ahí puede dejar la app sin nube | `cd firestore-tests`, `npm install`, `npm test` |
 
 ## Pruebas automáticas del área
 
@@ -48,6 +50,7 @@ hicieron.
 | `test/domain/descuento_receta_test.dart` | Descuento por ingrediente; suma de ingredientes del mismo alimento; tope en lo disponible; ingredientes sin cantidad medible; ingredientes que no son de la despensa; receta vacía | 6 pruebas, todas pasan |
 | `test/domain/lista_compra_agregar_test.dart` | Añadir varios; no repetir lo que ya está; ignorar mayúsculas y tildes; volver a añadir lo ya comprado; no repetir dentro del mismo lote; nombres vacíos; ids distintos | 7 pruebas, todas pasan |
 | `test/domain/hogar_service_test.dart` | Crear o reutilizar el hogar; unirse (cambio de hogar, código en minúsculas, errores claros, copia de despensa solo si se pide); deshacer la entrada si falla la copia o el guardado; seguir en el hogar nuevo si no puede salir del anterior; salir; no hacer nada si es la única persona | 12 pruebas, todas pasan |
+| `firestore-tests/pruebas.js` | Reglas de Firestore: crear hogar, leer, unirse, salir, quitar a otra persona (solo el dueño), campos que no se pueden cambiar, acceso a la despensa y los pasos reales de la app | 30 pruebas, todas pasan (con las reglas anteriores pasaban 19) |
 
 Para correrlas: `flutter test`. Para revisar el código: `flutter analyze`.
 
@@ -70,12 +73,18 @@ se dejaron para después.
   hogar nuevo, si falla quitar a la persona del anterior no se revierte nada: ya usa el
   hogar nuevo. Lo contrario la dejaría sin poder unirse por un detalle menor. Queda
   la posibilidad de figurar todavía como miembro del hogar viejo.
-- **Código de invitación de un hogar abandonado sigue activo (sin arreglar).** Si la
-  única persona de un hogar se une a otro, el hogar viejo queda con 0 miembros pero su
-  código sigue funcionando, y las reglas de `firestore.rules` dejan que alguien se
-  añada a un hogar vacío. Esa persona vería lo que quedó guardado allí. Arreglarlo
-  exige cambiar las reglas, y no se pueden probar aquí (hace falta el simulador de
-  Firebase), así que se deja como pendiente.
+- **Código de invitación de un hogar abandonado seguía activo (resuelto en las
+  reglas nuevas).** Si la única persona de un hogar se unía a otro, el hogar viejo
+  quedaba con 0 miembros pero su código seguía funcionando, y las reglas dejaban que
+  alguien se añadiera a un hogar vacío y viera lo que quedó guardado allí. Las reglas
+  nuevas no permiten unirse a un hogar sin miembros. Verificado con el emulador de
+  Firestore (ver `firestore-tests`). **Falta publicarlas en Firebase.**
+- **Decisión: dueño y permisos.** Se evaluó que solo el dueño del hogar pudiera hacer
+  cualquier cambio, pero eso impediría que otras personas se unan o salgan por su
+  cuenta. Quedó así: cualquiera se une o sale por sí mismo; solo el dueño (quien creó
+  el hogar) puede quitar a otra persona; el código y el dueño no cambian nunca. Dar
+  permisos del dueño a otros miembros (administradores) no se hizo: la app no tiene
+  hoy ninguna pantalla para quitar miembros y sería código sin uso.
 - **`salir` en la pantalla no maneja errores.** `pantalla_configuracion.dart` llama a
   `salir()` sin `try/catch`. Esa pantalla la está rediseñando Kevin, así que se
   arregla cuando él haga merge para no pisarnos.
@@ -88,7 +97,9 @@ se dejaron para después.
 - [ ] Manejo de error cuando la IA no responde en recetas.
 - [x] Hogar: `unirse()` puede dejar a la persona en dos hogares si falla a mitad.
 - [x] Hogar: `salir()` crea un hogar nuevo y deja el anterior abandonado cuando se va el único miembro.
-- [ ] Hogar: el código de un hogar abandonado (por `unirse`) sigue activo. Requiere cambiar `firestore.rules`.
-- [ ] Reglas de Firestore: restringir qué puede modificar un miembro en `hogares` (hoy cualquier miembro puede reescribir la lista de miembros y el código). Probar en el simulador de reglas de Firebase antes de publicar.
+- [x] Hogar: el código de un hogar abandonado (por `unirse`) sigue activo. Resuelto en `firestore.rules`.
+- [x] Reglas de Firestore: restringir qué puede modificar un miembro en `hogares`. Hecho y probado con el emulador.
+- [ ] **Publicar `firestore.rules` en Firebase** (Console → Firestore Database → Reglas → Publicar) y comprobar en la app con dos cuentas que unirse y salir siguen funcionando.
+- [ ] Reglas: la colección `invitaciones` deja que cualquier persona con sesión cree un código. No es grave (el hogar es un id aleatorio que no se conoce), pero se puede ajustar más adelante.
 - [ ] `pantalla_configuracion.dart`: manejar errores de `salir()` (coordinar con Kevin).
 - [ ] Sacar la tarjeta del hogar de `pantalla_configuracion.dart` a `features/nube/tarjeta_hogar.dart` (después del merge de Kevin).
