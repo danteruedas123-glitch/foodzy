@@ -44,6 +44,9 @@ hicieron.
 | 2026-10-17 | b97a798 | **Botón "Compartir" en cada receta.** Manda por WhatsApp, correo, etc. el título, tiempo y porciones, los ingredientes (marcando los que hay que conseguir) y los pasos numerados | `lib/features/recetas/domain/receta_texto.dart`, `lib/features/recetas/presentation/widgets/receta_card.dart` | Poder pasarle una receta a alguien sin copiarla a mano. Usa `share_plus`, que ya estaba en el proyecto | Abrir una receta, tocar "Compartir" y revisar el texto en WhatsApp |
 | 2026-10-17 | b97a798 | **`_confirmar` ya no deja la hoja bloqueada.** Si falla el guardado, avisa ("No pude descontar…" o "Solo se descontaron 1 de 2…") y se puede reintentar sin descontar de más | `lib/features/recetas/presentation/widgets/hoja_cocinar.dart` | Antes, un fallo dejaba el botón y "Ahora no" desactivados. Ver la corrección en "Problemas encontrados" | `flutter test test/widgets/hoja_cocinar_test.dart` |
 | 2026-10-17 | b97a798 | Pruebas del texto para compartir y de la hoja de cocinar (esta es de widget) | `test/domain/receta_texto_test.dart`, `test/widgets/hoja_cocinar_test.dart` | Ninguna de las dos tenía pruebas | `flutter test` |
+| 2026-10-17 | e4a92d0 | **Mensaje claro al unirse cuando las reglas rechazan la entrada.** Con las reglas nuevas, unirse a un hogar que quedó vacío falla; ahora se explica "No pude unirte a ese hogar. Puede que el código ya no esté activo…" en vez de mostrar el error técnico de Firebase | `lib/features/nube/hogar.dart`, `test/domain/hogar_service_test.dart` | Efecto directo de las reglas nuevas: sin esto la persona vería algo como `[cloud_firestore/permission-denied]` | Prueba "si las reglas rechazan la entrada" |
+| 2026-10-17 | e4a92d0 | **`Salir del hogar` ya no falla en silencio.** Si no se puede salir, muestra "No pude salir del hogar. Revisa tu conexión…" | `lib/features/configuracion/presentation/pantallas/pantalla_configuracion.dart` | Antes la excepción no se manejaba. Es un cambio de una función, para no chocar con el rediseño de Kevin | Salir del hogar sin conexión: debe aparecer el mensaje |
+| 2026-10-17 | e4a92d0 | Nuevo `.gitattributes` con `* text=auto` | `.gitattributes` | Que los saltos de línea se guarden igual en todos los computadores y las ramas no choquen por eso | Ver "Problemas encontrados" |
 
 ## Pruebas automáticas del área
 
@@ -52,7 +55,7 @@ hicieron.
 | `test/domain/recetas_parsear_test.dart` | Receta válida; objeto único en vez de lista; `alimento_id` inventado; cantidad usada limitada a lo disponible; cantidades 0/negativas/nulas; recetas sin ingredientes o pasos; elementos que no son objetos; valores por defecto; respuesta vacía; JSON de ida y vuelta | 11 pruebas, todas pasan |
 | `test/domain/descuento_receta_test.dart` | Descuento por ingrediente; suma de ingredientes del mismo alimento; tope en lo disponible; ingredientes sin cantidad medible; ingredientes que no son de la despensa; receta vacía | 6 pruebas, todas pasan |
 | `test/domain/lista_compra_agregar_test.dart` | Añadir varios; no repetir lo que ya está; ignorar mayúsculas y tildes; volver a añadir lo ya comprado; no repetir dentro del mismo lote; nombres vacíos; ids distintos | 7 pruebas, todas pasan |
-| `test/domain/hogar_service_test.dart` | Crear o reutilizar el hogar; unirse (cambio de hogar, código en minúsculas, errores claros, copia de despensa solo si se pide); deshacer la entrada si falla la copia o el guardado; seguir en el hogar nuevo si no puede salir del anterior; salir; no hacer nada si es la única persona | 12 pruebas, todas pasan |
+| `test/domain/hogar_service_test.dart` | Crear o reutilizar el hogar; unirse (cambio de hogar, código en minúsculas, errores claros, copia de despensa solo si se pide); deshacer la entrada si falla la copia o el guardado; seguir en el hogar nuevo si no puede salir del anterior; salir; no hacer nada si es la única persona; explicar en español si las reglas rechazan la entrada | 13 pruebas, todas pasan |
 | `test/domain/receta_texto_test.dart` | Texto para compartir: título, tiempo, ingredientes, pasos numerados; marca lo que hay que conseguir; "1 porción" en singular; sin descripción vacía; sin "·" suelto | 5 pruebas, todas pasan |
 | `test/widgets/hoja_cocinar_test.dart` | Hoja de cocinar: descuenta y cierra; si falla el guardado avisa y se puede reintentar; si falla a mitad dice cuántos se descontaron y reintentar no descuenta dos veces. Con la versión anterior del archivo fallaban las 2 de error | 3 pruebas, todas pasan |
 | `firestore-tests/pruebas.js` | Reglas de Firestore: crear hogar, leer, unirse, salir, quitar a otra persona (solo el dueño), campos que no se pueden cambiar, acceso a la despensa y los pasos reales de la app | 30 pruebas, todas pasan (con las reglas anteriores pasaban 19) |
@@ -77,10 +80,16 @@ se dejaron para después.
   después, sin lanzar errores. El bloqueo solo podía pasar en modo local, si fallaba
   la base de datos del teléfono, que es poco común. Se arregló igual porque es una
   defensa barata.
-- **`actualizar` en modo nube se traga los errores (sin tocar; archivo de Sebastian).**
-  `alimentos_provider.dart` usa `unawaited(_repo.guardar(...).catchError((_) {}))`. Si
-  Firestore rechaza el guardado (por ejemplo por las reglas de seguridad), la app
-  muestra el cambio como hecho y nadie se entera. Conviene avisarle a Sebastian.
+- **`actualizar` en modo nube no avisa si el guardado falla (sin tocar; archivo de
+  Sebastian).** `alimentos_provider.dart` usa
+  `unawaited(_repo.guardar(...).catchError((_) {}))`. Si Firestore rechaza un guardado
+  (por ejemplo por las reglas de seguridad), el cambio se muestra al instante y el
+  error se descarta sin mensaje. Corrección del 2026-10-17: al principio se anotó que
+  el cambio "quedaba como hecho". Firestore revierte solo su copia local cuando el
+  servidor rechaza una escritura, y el listener de la despensa lo refleja, así que lo
+  más probable es que la pantalla se corrija sola; lo que falta es el mensaje, y eso
+  necesita cambios de pantalla. No está verificado en el teléfono. Conviene
+  comentárselo a Sebastian.
 
 - **Decisión: salir del hogar anterior es "lo mejor posible".** Después de entrar al
   hogar nuevo, si falla quitar a la persona del anterior no se revierte nada: ya usa el
@@ -101,13 +110,30 @@ se dejaron para después.
 - **`salir` en la pantalla no maneja errores.** `pantalla_configuracion.dart` llama a
   `salir()` sin `try/catch`. Esa pantalla la está rediseñando Kevin, así que se
   arregla cuando él haga merge para no pisarnos.
+- **La rama de Kevin choca con todo por los saltos de línea (hallado el 2026-10-17).**
+  Probado con `git merge-tree`: mi rama contra `main` no tiene choques, pero contra
+  `Design-Prevew` choca en 7 archivos que Kevin ni siquiera modificó. Causa: su commit
+  `c77b481` cambió 158 archivos y solo 6 tienen cambios de verdad; en los demás solo
+  cambió los saltos de línea (guardó CRLF, estilo Windows, donde `main` guarda LF).
+  Solución: Kevin crea una rama nueva desde `main` actualizado, copia solo sus archivos
+  reales (`auth_provider.dart`, `pantalla_configuracion.dart`, `pantalla_inicio.dart`,
+  `insignias_premium.dart`, `.vscode/settings.json`) y NO incluye
+  `build/reports/problems/problems-report.html`. Con `.gitattributes` ya no debería
+  repetirse.
+- **La huella de firma de este computador no está en Firebase (hallado el
+  2026-10-17).** La app se instaló bien en el teléfono, pero Google Play Services
+  avisó que el certificado de este equipo no está permitido. Afecta "Iniciar sesión
+  con Google" (probable, no probado); correo y contraseña, recetas, compras y hogar no
+  dependen de eso.
 
 ## Pendiente
 
 - [x] Revisar `hoja_cocinar.dart`: ¿se descuenta de más cuando un alimento aparece dos veces? No.
 - [x] Pruebas del descuento de ingredientes al cocinar.
 - [x] `hoja_cocinar.dart`: manejar errores en `_confirmar` para no dejar la hoja bloqueada.
-- [ ] Avisar a Sebastian de que `actualizar` (modo nube) se traga los errores de guardado.
+- [ ] Avisar a Sebastian de que `actualizar` (modo nube) descarta los errores de guardado sin mensaje.
+- [ ] **Kevin:** su rama `Design-Prevew` guarda los archivos con saltos de línea de Windows (CRLF) y cambió 158 archivos solo por eso, así que choca con casi todo lo demás. Debe rehacerla con solo sus 5 archivos de verdad (ver "Problemas encontrados") y sin el reporte de `build/`.
+- [ ] **Firebase:** registrar la huella SHA-1 de cada computador del equipo (en la consola de Firebase) para que "Iniciar sesión con Google" funcione al probar en el teléfono, y bajar el `google-services.json` nuevo.
 - [ ] Manejo de error cuando la IA no responde en recetas.
 - [x] Hogar: `unirse()` puede dejar a la persona en dos hogares si falla a mitad.
 - [x] Hogar: `salir()` crea un hogar nuevo y deja el anterior abandonado cuando se va el único miembro.
@@ -115,5 +141,5 @@ se dejaron para después.
 - [x] Reglas de Firestore: restringir qué puede modificar un miembro en `hogares`. Hecho y probado con el emulador.
 - [ ] **Publicar `firestore.rules` en Firebase** (Console → Firestore Database → Reglas → Publicar) y comprobar en la app con dos cuentas que unirse y salir siguen funcionando.
 - [ ] Reglas: la colección `invitaciones` deja que cualquier persona con sesión cree un código. No es grave (el hogar es un id aleatorio que no se conoce), pero se puede ajustar más adelante.
-- [ ] `pantalla_configuracion.dart`: manejar errores de `salir()` (coordinar con Kevin).
+- [x] `pantalla_configuracion.dart`: manejar errores de `salir()`. Hecho con un cambio mínimo.
 - [ ] Sacar la tarjeta del hogar de `pantalla_configuracion.dart` a `features/nube/tarjeta_hogar.dart` (después del merge de Kevin).
