@@ -68,7 +68,14 @@ class HogarService {
     if (nuevoId == actual.id) throw const HogarError('Ya perteneces a ese hogar.');
 
     // Se entra primero al hogar nuevo (lo permiten las reglas de seguridad).
-    await _repo.agregarMiembro(nuevoId, uid);
+    // Las reglas rechazan, por ejemplo, entrar a un hogar que quedó vacío; en
+    // ese caso se explica en español en vez de mostrar el error técnico.
+    try {
+      await _repo.agregarMiembro(nuevoId, uid);
+    } catch (_) {
+      throw const HogarError(
+          'No pude unirte a ese hogar. Puede que el código ya no esté activo; revísalo con quien te invitó.');
+    }
     try {
       if (copiar != null) await copiar(actual.id, nuevoId);
       await _repo.asignar(uid, nuevoId);

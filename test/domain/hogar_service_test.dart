@@ -11,6 +11,9 @@ class RepoFalso implements HogarRepository {
   /// `asignar` lanza error.
   bool fallaAsignar = false;
 
+  /// `agregarMiembro` lanza error (como cuando las reglas de seguridad lo rechazan).
+  bool fallaAgregar = false;
+
   /// `quitarMiembro` lanza error para este hogar.
   String? hogarQueNoSeDejaSalir;
 
@@ -38,8 +41,10 @@ class RepoFalso implements HogarRepository {
   Future<String?> hogarIdPorCodigo(String codigo) async => codigos[codigo];
 
   @override
-  Future<void> agregarMiembro(String hogarId, String uid) async =>
-      hogares[hogarId]!.add(uid);
+  Future<void> agregarMiembro(String hogarId, String uid) async {
+    if (fallaAgregar) throw Exception('permission-denied');
+    hogares[hogarId]!.add(uid);
+  }
 
   @override
   Future<void> quitarMiembro(String hogarId, String uid) async {
@@ -159,6 +164,23 @@ void main() {
       expect(repo.hogares[ana.id], {'ana'});
       expect(repo.hogares[luis.id], {'luis'});
       expect(repo.usuarios['luis'], luis.id);
+    });
+
+    test('si las reglas rechazan la entrada, explica en español y no cambia nada', () async {
+      repo.fallaAgregar = true;
+
+      await expectLater(
+        servicio.unirse(uid: 'luis', actual: luis, codigo: ana.codigo),
+        throwsA(isA<HogarError>().having(
+          (e) => e.mensaje,
+          'mensaje',
+          contains('el código ya no esté activo'),
+        )),
+      );
+
+      expect(repo.usuarios['luis'], luis.id);
+      expect(repo.hogares[luis.id], {'luis'});
+      expect(repo.hogares[ana.id], {'ana'});
     });
 
     test('si no puede salir del hogar anterior, igual queda en el nuevo', () async {

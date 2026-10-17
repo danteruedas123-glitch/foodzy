@@ -1,0 +1,5 @@
+# Que Git guarde siempre los saltos de línea de los archivos de texto de la misma
+# forma (LF), sin importar el sistema ni la configuración de cada computador.
+# Sin esto, un computador con otra configuración puede reescribir cientos de
+# archivos "completos" y hacer que las ramas choquen entre sí.
+* text=auto
