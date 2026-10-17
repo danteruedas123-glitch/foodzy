@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foodzy/features/compras/presentation/lista_compra_provider.dart';
+import 'package:foodzy/features/recetas/domain/receta_texto.dart';
 import 'package:foodzy/features/recetas/domain/recetas_service.dart';
+import 'package:share_plus/share_plus.dart';
 
 /// Tarjeta desplegable con una receta: ingredientes (de la despensa o por
 /// conseguir) y pasos numerados.
@@ -93,19 +95,32 @@ class RecetaCard extends ConsumerWidget {
             ),
           ),
           children: [
-            if (onFavorita != null)
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: onFavorita,
-                  icon: Icon(
-                    favorita ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                    color: favorita ? const Color(0xFFEF4444) : null,
-                    size: 20,
+            Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                spacing: 4,
+                children: [
+                  TextButton.icon(
+                    onPressed: () => SharePlus.instance.share(ShareParams(
+                      text: textoParaCompartir(receta),
+                      subject: receta.titulo,
+                    )),
+                    icon: const Icon(Icons.ios_share_rounded, size: 20),
+                    label: const Text('Compartir'),
                   ),
-                  label: Text(favorita ? 'En favoritas' : 'Guardar en favoritas'),
-                ),
+                  if (onFavorita != null)
+                    TextButton.icon(
+                      onPressed: onFavorita,
+                      icon: Icon(
+                        favorita ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                        color: favorita ? const Color(0xFFEF4444) : null,
+                        size: 20,
+                      ),
+                      label: Text(favorita ? 'En favoritas' : 'Guardar en favoritas'),
+                    ),
+                ],
               ),
+            ),
             if (receta.descripcion.isNotEmpty) ...[
               Text(receta.descripcion, style: theme.textTheme.bodyMedium),
               const SizedBox(height: 10),

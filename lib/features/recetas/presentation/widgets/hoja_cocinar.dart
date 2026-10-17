@@ -73,16 +73,31 @@ class _HojaCocinarState extends ConsumerState<_HojaCocinar> {
     final activas = _lineas.where((l) => l.activa && l.cantidad > 0).toList();
     setState(() => _guardando = true);
     final notifier = ref.read(alimentosProvider.notifier);
-    for (final l in activas) {
-      final a = l.alimento;
-      final restante = double.parse((l.total - l.cantidad).toStringAsFixed(3));
-      if (restante <= 0.0001) {
-        await notifier.actualizar(a.copyWith(estado: Consumido(DateTime.now())));
-      } else {
-        await notifier.actualizar(
-          a.copyWith(cantidad: Cantidad(valor: restante, unidad: a.cantidad.unidad)),
-        );
+    var descontados = 0;
+    try {
+      for (final l in activas) {
+        final a = l.alimento;
+        final restante = double.parse((l.total - l.cantidad).toStringAsFixed(3));
+        if (restante <= 0.0001) {
+          await notifier.actualizar(a.copyWith(estado: Consumido(DateTime.now())));
+        } else {
+          await notifier.actualizar(
+            a.copyWith(cantidad: Cantidad(valor: restante, unidad: a.cantidad.unidad)),
+          );
+        }
+        descontados++;
       }
+    } catch (_) {
+      // Si falla el guardado, la hoja se desbloquea para poder reintentar.
+      // Reintentar es seguro: cada renglón guarda la cantidad final, no una resta.
+      if (!mounted) return;
+      setState(() => _guardando = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(descontados == 0
+            ? 'No pude descontar de tu despensa. Intenta de nuevo.'
+            : 'Solo se descontaron $descontados de ${activas.length} ingredientes. Toca de nuevo para terminar.'),
+      ));
+      return;
     }
     if (!mounted) return;
     Navigator.of(context).pop(activas.isNotEmpty);
