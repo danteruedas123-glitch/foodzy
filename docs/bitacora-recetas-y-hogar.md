@@ -41,6 +41,9 @@ hicieron.
 | 2026-10-15 | 46bedc0 | Pruebas del servicio del hogar | `test/domain/hogar_service_test.dart` | La lógica del hogar no tenía ninguna prueba | `flutter test test/domain/hogar_service_test.dart` |
 | 2026-10-16 | 14fbc66 | **Reglas de seguridad del hogar más estrictas.** Crear: solo un hogar propio y quedando como dueño. Cambiar: solo la lista de miembros, y solo de tres formas (una persona se une a un hogar con gente, una persona sale, o el dueño quita a otra). Antes cualquier miembro podía reescribir los miembros y el código, y se podía unir alguien a un hogar vacío | `firestore.rules` | Evitar que un miembro pueda meter o sacar gente a su gusto, cambiar el código o quedarse con un hogar | `firestore-tests`: 30 de 30 pasan con las reglas nuevas; con las viejas pasaban 19 de 30 |
 | 2026-10-16 | 14fbc66 | Pruebas de las reglas con el emulador de Firestore (Node) | `firestore-tests/` (`pruebas.js`, `package.json`, `firebase.json`, `README.md`) y `.gitignore` | Las reglas no se podían probar y un error ahí puede dejar la app sin nube | `cd firestore-tests`, `npm install`, `npm test` |
+| 2026-10-17 | b97a798 | **Botón "Compartir" en cada receta.** Manda por WhatsApp, correo, etc. el título, tiempo y porciones, los ingredientes (marcando los que hay que conseguir) y los pasos numerados | `lib/features/recetas/domain/receta_texto.dart`, `lib/features/recetas/presentation/widgets/receta_card.dart` | Poder pasarle una receta a alguien sin copiarla a mano. Usa `share_plus`, que ya estaba en el proyecto | Abrir una receta, tocar "Compartir" y revisar el texto en WhatsApp |
+| 2026-10-17 | b97a798 | **`_confirmar` ya no deja la hoja bloqueada.** Si falla el guardado, avisa ("No pude descontar…" o "Solo se descontaron 1 de 2…") y se puede reintentar sin descontar de más | `lib/features/recetas/presentation/widgets/hoja_cocinar.dart` | Antes, un fallo dejaba el botón y "Ahora no" desactivados. Ver la corrección en "Problemas encontrados" | `flutter test test/widgets/hoja_cocinar_test.dart` |
+| 2026-10-17 | b97a798 | Pruebas del texto para compartir y de la hoja de cocinar (esta es de widget) | `test/domain/receta_texto_test.dart`, `test/widgets/hoja_cocinar_test.dart` | Ninguna de las dos tenía pruebas | `flutter test` |
 
 ## Pruebas automáticas del área
 
@@ -50,6 +53,8 @@ hicieron.
 | `test/domain/descuento_receta_test.dart` | Descuento por ingrediente; suma de ingredientes del mismo alimento; tope en lo disponible; ingredientes sin cantidad medible; ingredientes que no son de la despensa; receta vacía | 6 pruebas, todas pasan |
 | `test/domain/lista_compra_agregar_test.dart` | Añadir varios; no repetir lo que ya está; ignorar mayúsculas y tildes; volver a añadir lo ya comprado; no repetir dentro del mismo lote; nombres vacíos; ids distintos | 7 pruebas, todas pasan |
 | `test/domain/hogar_service_test.dart` | Crear o reutilizar el hogar; unirse (cambio de hogar, código en minúsculas, errores claros, copia de despensa solo si se pide); deshacer la entrada si falla la copia o el guardado; seguir en el hogar nuevo si no puede salir del anterior; salir; no hacer nada si es la única persona | 12 pruebas, todas pasan |
+| `test/domain/receta_texto_test.dart` | Texto para compartir: título, tiempo, ingredientes, pasos numerados; marca lo que hay que conseguir; "1 porción" en singular; sin descripción vacía; sin "·" suelto | 5 pruebas, todas pasan |
+| `test/widgets/hoja_cocinar_test.dart` | Hoja de cocinar: descuenta y cierra; si falla el guardado avisa y se puede reintentar; si falla a mitad dice cuántos se descontaron y reintentar no descuenta dos veces. Con la versión anterior del archivo fallaban las 2 de error | 3 pruebas, todas pasan |
 | `firestore-tests/pruebas.js` | Reglas de Firestore: crear hogar, leer, unirse, salir, quitar a otra persona (solo el dueño), campos que no se pueden cambiar, acceso a la despensa y los pasos reales de la app | 30 pruebas, todas pasan (con las reglas anteriores pasaban 19) |
 
 Para correrlas: `flutter test`. Para revisar el código: `flutter analyze`.
@@ -64,10 +69,18 @@ se dejaron para después.
   `hoja_cocinar.dart` se vio que ya los suma y limita el total a lo disponible, así
   que no era un problema. Ahora queda cubierto con pruebas en
   `descuento_receta_test.dart`.
-- **`_confirmar` sin manejo de errores (confirmado en el código).** En
-  `hoja_cocinar.dart`, si `actualizar` falla a mitad (por ejemplo sin conexión en
-  modo nube), una parte ya se descontó y la hoja queda bloqueada porque
-  `_guardando` nunca vuelve a `false`. Hallado el 2026-10-15; pendiente de arreglar.
+- **`_confirmar` sin manejo de errores (arreglado, con una corrección).** En
+  `hoja_cocinar.dart`, si `actualizar` fallaba a mitad, una parte ya se descontaba y la
+  hoja quedaba bloqueada porque `_guardando` nunca volvía a `false`. Corrección del
+  2026-10-17: al principio se anotó que pasaba "sin conexión en modo nube", y eso es
+  falso. En modo nube `actualizar` guarda al instante y deja que Firestore confirme
+  después, sin lanzar errores. El bloqueo solo podía pasar en modo local, si fallaba
+  la base de datos del teléfono, que es poco común. Se arregló igual porque es una
+  defensa barata.
+- **`actualizar` en modo nube se traga los errores (sin tocar; archivo de Sebastian).**
+  `alimentos_provider.dart` usa `unawaited(_repo.guardar(...).catchError((_) {}))`. Si
+  Firestore rechaza el guardado (por ejemplo por las reglas de seguridad), la app
+  muestra el cambio como hecho y nadie se entera. Conviene avisarle a Sebastian.
 
 - **Decisión: salir del hogar anterior es "lo mejor posible".** Después de entrar al
   hogar nuevo, si falla quitar a la persona del anterior no se revierte nada: ya usa el
@@ -93,7 +106,8 @@ se dejaron para después.
 
 - [x] Revisar `hoja_cocinar.dart`: ¿se descuenta de más cuando un alimento aparece dos veces? No.
 - [x] Pruebas del descuento de ingredientes al cocinar.
-- [ ] `hoja_cocinar.dart`: manejar errores en `_confirmar` (`try/catch/finally`) para no dejar la hoja bloqueada.
+- [x] `hoja_cocinar.dart`: manejar errores en `_confirmar` para no dejar la hoja bloqueada.
+- [ ] Avisar a Sebastian de que `actualizar` (modo nube) se traga los errores de guardado.
 - [ ] Manejo de error cuando la IA no responde en recetas.
 - [x] Hogar: `unirse()` puede dejar a la persona en dos hogares si falla a mitad.
 - [x] Hogar: `salir()` crea un hogar nuevo y deja el anterior abandonado cuando se va el único miembro.
