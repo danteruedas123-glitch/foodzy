@@ -49,3 +49,9 @@ app.*.map.json
 
 # Claves locales (no subir)
 claves.json
+
+# Pruebas de reglas de Firestore (Node)
+firestore-tests/node_modules/
+firestore-tests/package-lock.json
+firestore-tests/firestore-debug.log
+firestore-tests/*.log

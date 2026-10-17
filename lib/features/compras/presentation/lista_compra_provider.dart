@@ -47,20 +47,45 @@ class ListaCompraNotifier extends AsyncNotifier<List<ItemCompra>> {
     state = AsyncData(_ordenar(await _repo.obtener()));
   }
 
+  int _ultimoId = 0;
+
+  /// Un id por producto, distinto incluso si se añaden varios seguidos.
+  String _nuevoId() {
+    var t = DateTime.now().microsecondsSinceEpoch;
+    if (t <= _ultimoId) t = _ultimoId + 1;
+    _ultimoId = t;
+    return t.toString();
+  }
+
   /// Añade un producto; ignora duplicados que aún no se han comprado.
-  Future<void> agregar(String nombre, {String? cantidad}) async {
+  /// Devuelve `true` si lo añadió.
+  Future<bool> agregar(String nombre, {String? cantidad}) async {
     final limpio = nombre.trim();
-    if (limpio.isEmpty) return;
+    if (limpio.isEmpty) return false;
     final actuales = state.value ?? const <ItemCompra>[];
     final clave = claveNombre(limpio);
-    if (actuales.any((i) => !i.comprado && claveNombre(i.nombre) == clave)) return;
+    if (actuales.any((i) => !i.comprado && claveNombre(i.nombre) == clave)) return false;
     await _repo.guardar(ItemCompra(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      id: _nuevoId(),
       nombre: limpio,
       cantidad: cantidad,
       creado: DateTime.now(),
     ));
     await _recargar();
+    return true;
+  }
+
+  /// Añade varios productos (por ejemplo, lo que le falta a una receta).
+  /// Devuelve cuántos eran nuevos; los que ya estaban en la lista se omiten.
+  Future<int> agregarVarios(
+    Iterable<({String nombre, String? cantidad})> productos,
+  ) async {
+    await future; // Que la lista ya esté cargada, para detectar repetidos.
+    var nuevos = 0;
+    for (final p in productos) {
+      if (await agregar(p.nombre, cantidad: p.cantidad)) nuevos++;
+    }
+    return nuevos;
   }
 
   Future<void> alternar(ItemCompra item) async {

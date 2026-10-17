@@ -6,6 +6,7 @@ import 'package:foodzy/features/alimentos/domain/cantidad.dart';
 import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
 import 'package:foodzy/features/alimentos/presentation/providers/alimentos_provider.dart';
 import 'package:foodzy/features/alimentos/presentation/widgets/alimento_card.dart';
+import 'package:foodzy/features/recetas/domain/descuento_receta.dart';
 import 'package:foodzy/features/recetas/domain/recetas_service.dart';
 
 /// Pregunta si se va a cocinar la receta y, si se acepta, descuenta de la
@@ -53,24 +54,11 @@ class _HojaCocinarState extends ConsumerState<_HojaCocinar> {
         if (a.estado is Disponible) a.id: a,
     };
 
-    // Si dos ingredientes salen del mismo alimento, se suman.
-    final sumas = <String, double>{};
-    final sinMedir = <String>[];
-    for (final i in widget.receta.ingredientes) {
-      final a = i.alimentoId == null ? null : despensa[i.alimentoId];
-      if (a == null) continue;
-      final usada = i.cantidadUsada;
-      if (usada == null || usada <= 0) {
-        sinMedir.add(i.nombre);
-        continue;
-      }
-      sumas[a.id] = (sumas[a.id] ?? 0) + usada;
-    }
+    final descuento = calcularDescuento(widget.receta, despensa);
     _lineas = [
-      for (final e in sumas.entries)
-        _Linea(despensa[e.key]!, e.value.clamp(0.0, despensa[e.key]!.cantidad.valor).toDouble()),
+      for (final d in descuento.lineas) _Linea(d.alimento, d.cantidad),
     ];
-    _sinMedir = sinMedir;
+    _sinMedir = descuento.sinMedir;
   }
 
   void _poner(_Linea l, double v) {
@@ -85,16 +73,31 @@ class _HojaCocinarState extends ConsumerState<_HojaCocinar> {
     final activas = _lineas.where((l) => l.activa && l.cantidad > 0).toList();
     setState(() => _guardando = true);
     final notifier = ref.read(alimentosProvider.notifier);
-    for (final l in activas) {
-      final a = l.alimento;
-      final restante = double.parse((l.total - l.cantidad).toStringAsFixed(3));
-      if (restante <= 0.0001) {
-        await notifier.actualizar(a.copyWith(estado: Consumido(DateTime.now())));
-      } else {
-        await notifier.actualizar(
-          a.copyWith(cantidad: Cantidad(valor: restante, unidad: a.cantidad.unidad)),
-        );
+    var descontados = 0;
+    try {
+      for (final l in activas) {
+        final a = l.alimento;
+        final restante = double.parse((l.total - l.cantidad).toStringAsFixed(3));
+        if (restante <= 0.0001) {
+          await notifier.actualizar(a.copyWith(estado: Consumido(DateTime.now())));
+        } else {
+          await notifier.actualizar(
+            a.copyWith(cantidad: Cantidad(valor: restante, unidad: a.cantidad.unidad)),
+          );
+        }
+        descontados++;
       }
+    } catch (_) {
+      // Si falla el guardado, la hoja se desbloquea para poder reintentar.
+      // Reintentar es seguro: cada renglón guarda la cantidad final, no una resta.
+      if (!mounted) return;
+      setState(() => _guardando = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(descontados == 0
+            ? 'No pude descontar de tu despensa. Intenta de nuevo.'
+            : 'Solo se descontaron $descontados de ${activas.length} ingredientes. Toca de nuevo para terminar.'),
+      ));
+      return;
     }
     if (!mounted) return;
     Navigator.of(context).pop(activas.isNotEmpty);

@@ -261,7 +261,16 @@ class _PantallaConfiguracionState extends ConsumerState<PantallaConfiguracion> {
         ],
       ),
     );
-    if (ok == true) await ref.read(hogarProvider.notifier).salir();
+    if (ok != true) return;
+    try {
+      await ref.read(hogarProvider.notifier).salir();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No pude salir del hogar. Revisa tu conexión e intenta de nuevo.')),
+        );
+      }
+    }
   }
 
   Widget _tarjetaPremium(ThemeData theme) {
