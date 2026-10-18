@@ -166,8 +166,10 @@ class PantallaDetalle extends ConsumerWidget {
                     _InfoRow(
                       icon: Icons.scale,
                       label: 'Cantidad',
-                      value:
-                          '${alimento.cantidad.valor} ${alimento.cantidad.unidad}',
+                      value: fmtCantidad(
+                        alimento.cantidad.valor,
+                        alimento.cantidad.unidad,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     _InfoRow(
@@ -245,7 +247,7 @@ class PantallaDetalle extends ConsumerWidget {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
-                                        'Tienes ${alimento.cantidad.valor} ${alimento.cantidad.unidad}. ¿Cuánto vas a consumir?',
+                                        'Tienes ${fmtCantidad(alimento.cantidad.valor, alimento.cantidad.unidad)}. ¿Cuánto vas a consumir?',
                                       ),
                                       const SizedBox(height: 16),
                                       Row(
