@@ -6,6 +6,7 @@ import 'package:foodzy/core/nube.dart';
 import 'package:foodzy/features/alimentos/data/alimentos_db.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
 import 'package:foodzy/features/alimentos/domain/alimentos_repository.dart';
+import 'package:foodzy/features/alimentos/domain/busqueda.dart';
 import 'package:foodzy/features/alimentos/domain/cantidad.dart';
 import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
 import 'package:foodzy/features/alimentos/domain/historial.dart';
@@ -219,7 +220,7 @@ final historialProvider = Provider<AsyncValue<List<Alimento>>>((ref) {
 
 final alimentosFiltradosProvider = Provider<AsyncValue<List<Alimento>>>((ref) {
   final activos = ref.watch(despensaActivaProvider);
-  final busqueda = ref.watch(searchQueryProvider).toLowerCase();
+  final busqueda = ref.watch(searchQueryProvider);
   final filtro = ref.watch(filtroEstadoProvider);
   final ubicacion = ref.watch(filtroUbicacionProvider);
 
@@ -233,9 +234,7 @@ final alimentosFiltradosProvider = Provider<AsyncValue<List<Alimento>>>((ref) {
       };
       if (!pasa) return false;
       if (ubicacion != null && a.ubicacion != ubicacion) return false;
-      if (busqueda.isEmpty) return true;
-      return a.nombre.toLowerCase().contains(busqueda) ||
-          a.categoria.toLowerCase().contains(busqueda);
+      return coincideBusqueda(a, busqueda);
     }).toList();
   });
 });
