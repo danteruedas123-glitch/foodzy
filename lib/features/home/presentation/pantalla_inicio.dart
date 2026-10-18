@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foodzy/core/captura.dart';
@@ -14,6 +16,10 @@ import 'package:foodzy/features/alimentos/presentation/widgets/alimento_card.dar
 import 'package:foodzy/features/alimentos/presentation/widgets/estado_visual.dart';
 import 'package:foodzy/features/auth/presentation/providers/auth_provider.dart';
 import 'package:foodzy/features/compras/presentation/pantalla_lista_compra.dart';
+import 'package:foodzy/features/configuracion/presentation/providers/theme_provider.dart';
+import 'package:foodzy/features/home/presentation/fondo_alimentos.dart';
+import 'package:foodzy/features/premium/insignias_premium.dart';
+import 'package:foodzy/features/premium/premium_provider.dart';
 
 /// Pestaña "Inicio": resumen, accesos rápidos y lo que vence pronto.
 class PantallaInicio extends ConsumerWidget {
@@ -37,6 +43,13 @@ class PantallaInicio extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final nombre = ref.watch(authProvider).userName ?? 'chef';
+    final premium = ref.watch(premiumProvider.select((p) => p.premium));
+    // Se puede apagar en Ajustes (rendimiento o gusto): vuelve al degradado.
+    final animado = ref.watch(themeProvider.select((t) => t.fondoAnimado));
+    // Texto del encabezado: sobre el fondo animado sigue al tema; sobre el
+    // degradado, onPrimary.
+    final tinta =
+        animado ? theme.colorScheme.onSurface : theme.colorScheme.onPrimary;
     final async = ref.watch(alimentosProvider);
 
     final lista = async.value ?? const <Alimento>[];
@@ -57,40 +70,92 @@ class PantallaInicio extends ConsumerWidget {
       }
     }
 
+    final saludo = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('${_saludo()},',
+            style: theme.textTheme.titleMedium?.copyWith(
+                color: tinta.withValues(alpha: 0.85))),
+        Text(nombre,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.headlineMedium?.copyWith(
+                color: tinta,
+                fontWeight: FontWeight.w900)),
+        if (premium) ...[
+          const SizedBox(height: 6),
+          const InsigniaPremium(),
+        ],
+      ],
+    );
+
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
-          child: Container(
-            padding: EdgeInsets.fromLTRB(
-                20, MediaQuery.of(context).padding.top + 24, 20, 28),
-            decoration: BoxDecoration(
-              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(36)),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [theme.colorScheme.primary, theme.colorScheme.tertiary],
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('${_saludo()},',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(color: theme.colorScheme.onPrimary.withValues(alpha: 0.85))),
-                Text(nombre,
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                        color: theme.colorScheme.onPrimary, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 22),
-                Row(
-                  children: [
-                    _Stat('${disponibles.length}', 'En despensa', Icons.kitchen_rounded),
-                    const SizedBox(width: 10),
-                    _Stat('$porVencer', 'Por vencer', Icons.schedule_rounded),
-                    const SizedBox(width: 10),
-                    _Stat('$vencidos', 'Vencidos', Icons.warning_amber_rounded),
-                  ],
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(36)),
+            child: DecoratedBox(
+              // Con el fondo animado, el degradado solo se ve a través de los
+              // contornos de las siluetas.
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [theme.colorScheme.primary, theme.colorScheme.tertiary],
                 ),
-              ],
+              ),
+              child: Stack(
+                children: [
+                  if (animado)
+                    Positioned.fill(child: FondoAlimentos(premium: premium)),
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                        20, MediaQuery.of(context).padding.top + 24, 20, 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            // Align deja que el vidrio mida lo que mida el
+                            // nombre, sin pasarse del espacio disponible.
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: animado
+                                    ? _Vidrio(
+                                        padding: const EdgeInsets.fromLTRB(14, 10, 16, 12),
+                                        child: saludo,
+                                      )
+                                    : saludo,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const AvatarUsuario(radio: 26),
+                          ],
+                        ),
+                        const SizedBox(height: 22),
+                        // Las tres tarjetas toman la altura de la más alta.
+                        IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _Stat('${disponibles.length}', 'En despensa', Icons.kitchen_rounded,
+                                  vidrio: animado),
+                              const SizedBox(width: 10),
+                              _Stat('$porVencer', 'Por vencer', Icons.schedule_rounded,
+                                  vidrio: animado),
+                              const SizedBox(width: 10),
+                              _Stat('$vencidos', 'Vencidos', Icons.warning_amber_rounded,
+                                  vidrio: animado),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -304,31 +369,79 @@ class PantallaInicio extends ConsumerWidget {
 }
 
 class _Stat extends StatelessWidget {
-  const _Stat(this.valor, this.etiqueta, this.icono);
+  const _Stat(this.valor, this.etiqueta, this.icono, {required this.vidrio});
   final String valor;
   final String etiqueta;
   final IconData icono;
 
+  /// Sobre el fondo animado va como vidrio; sobre el degradado, translúcida.
+  final bool vidrio;
+
   @override
   Widget build(BuildContext context) {
-    final onP = Theme.of(context).colorScheme.onPrimary;
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-        decoration: BoxDecoration(
-          color: onP.withValues(alpha: 0.16),
-          borderRadius: BorderRadius.circular(20),
+    final cs = Theme.of(context).colorScheme;
+    final onP = vidrio ? cs.onSurface : cs.onPrimary;
+    const padding = EdgeInsets.symmetric(vertical: 14, horizontal: 12);
+    final contenido = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icono, color: onP, size: 20),
+        const SizedBox(height: 6),
+        Text(valor,
+            style: TextStyle(color: onP, fontSize: 26, fontWeight: FontWeight.w900)),
+        // En una sola línea: si no cabe, se achica en vez de partirse.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(etiqueta,
+              maxLines: 1,
+              style: TextStyle(color: onP.withValues(alpha: 0.85), fontSize: 12)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icono, color: onP, size: 20),
-            const SizedBox(height: 6),
-            Text(valor,
-                style: TextStyle(color: onP, fontSize: 26, fontWeight: FontWeight.w900)),
-            Text(etiqueta,
-                style: TextStyle(color: onP.withValues(alpha: 0.85), fontSize: 12)),
-          ],
+      ],
+    );
+    return Expanded(
+      child: vidrio
+          ? _Vidrio(padding: padding, child: contenido)
+          : Container(
+              padding: padding,
+              decoration: BoxDecoration(
+                color: onP.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: contenido,
+            ),
+    );
+  }
+}
+
+/// Recuadro de vidrio esmerilado (desenfoque + velo oscuro, o claro en tema
+/// claro) para que las siluetas del fondo animado no compitan con el texto.
+class _Vidrio extends StatelessWidget {
+  const _Vidrio({required this.child, required this.padding});
+
+  final Widget child;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final radio = BorderRadius.circular(20);
+    final oscuro = Theme.of(context).brightness == Brightness.dark;
+    return ClipRRect(
+      borderRadius: radio,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            color: oscuro
+                ? Colors.black.withValues(alpha: 0.35)
+                : Colors.white.withValues(alpha: 0.55),
+            borderRadius: radio,
+            border: Border.all(
+                color: (oscuro ? Colors.white : Colors.black)
+                    .withValues(alpha: oscuro ? 0.14 : 0.08)),
+          ),
+          child: child,
         ),
       ),
     );
