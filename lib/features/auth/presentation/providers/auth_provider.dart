@@ -12,11 +12,15 @@ class AuthState {
     this.userName,
     this.email,
     this.uid,
+    this.fotoUrl,
   });
 
   final bool isAuthenticated;
   final String? userName;
   final String? email;
+
+  /// Foto de perfil de la cuenta (por ejemplo, la de Google), si tiene.
+  final String? fotoUrl;
 
   /// Id de la cuenta en Firebase; `null` en modo local.
   final String? uid;
@@ -87,6 +91,7 @@ class AuthNotifier extends Notifier<AuthState> {
       userName: nombre,
       email: u.email,
       uid: u.uid,
+      fotoUrl: u.photoURL,
     );
   }
 
