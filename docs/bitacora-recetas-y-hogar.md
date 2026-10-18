@@ -133,13 +133,15 @@ se dejaron para después.
 - [x] `hoja_cocinar.dart`: manejar errores en `_confirmar` para no dejar la hoja bloqueada.
 - [ ] Avisar a Sebastian de que `actualizar` (modo nube) descarta los errores de guardado sin mensaje.
 - [ ] **Kevin:** su rama `Design-Prevew` guarda los archivos con saltos de línea de Windows (CRLF) y cambió 158 archivos solo por eso, así que choca con casi todo lo demás. Debe rehacerla con solo sus 5 archivos de verdad (ver "Problemas encontrados") y sin el reporte de `build/`.
-- [ ] **Firebase:** registrar la huella SHA-1 de cada computador del equipo (en la consola de Firebase) para que "Iniciar sesión con Google" funcione al probar en el teléfono, y bajar el `google-services.json` nuevo.
+- [x] **Firebase:** huella SHA-1 del computador de Keiver registrada por Halan el 2026-10-17, y `google-services.json` actualizado en `android/app/` (solo se añadió esa huella; nada más cambia). Falta probar "Iniciar sesión con Google" en el teléfono.
+- [ ] **Firebase:** registrar la huella SHA-1 del computador de Kevin y del de Sebastian, y bajar de nuevo el `google-services.json`.
 - [ ] Manejo de error cuando la IA no responde en recetas.
 - [x] Hogar: `unirse()` puede dejar a la persona en dos hogares si falla a mitad.
 - [x] Hogar: `salir()` crea un hogar nuevo y deja el anterior abandonado cuando se va el único miembro.
 - [x] Hogar: el código de un hogar abandonado (por `unirse`) sigue activo. Resuelto en `firestore.rules`.
 - [x] Reglas de Firestore: restringir qué puede modificar un miembro en `hogares`. Hecho y probado con el emulador.
-- [ ] **Publicar `firestore.rules` en Firebase** (Console → Firestore Database → Reglas → Publicar) y comprobar en la app con dos cuentas que unirse y salir siguen funcionando.
+- [x] **Publicar `firestore.rules` en Firebase** (Console → Firestore Database → Reglas → Publicar). Halan avisó el 2026-10-17 que ya las publicó; es su palabra, falta una captura de la pestaña Reglas con la fecha de "Última publicación".
+- [x] Comprobar en la app, con dos cuentas, que unirse y salir siguen funcionando con las reglas nuevas. Probado a mano por Keiver el 2026-10-17 en un celular Android: unirse con un código y salir del hogar funcionan sin errores.
 - [ ] Reglas: la colección `invitaciones` deja que cualquier persona con sesión cree un código. No es grave (el hogar es un id aleatorio que no se conoce), pero se puede ajustar más adelante.
 - [x] `pantalla_configuracion.dart`: manejar errores de `salir()`. Hecho con un cambio mínimo.
 - [ ] Sacar la tarjeta del hogar de `pantalla_configuracion.dart` a `features/nube/tarjeta_hogar.dart` (después del merge de Kevin).

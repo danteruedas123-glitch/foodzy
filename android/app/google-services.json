@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "235830420548-95o3b3shl5vsbo8vpjn30q19uv73imbi.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.foodzy",
+            "certificate_hash": "07dffe51e07e08601c82510e1bb54c3cacccaff5"
+          }
+        },
+        {
           "client_id": "235830420548-q8r3q7jn3r3vqltf1alv3ljp0m1j93r1.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
