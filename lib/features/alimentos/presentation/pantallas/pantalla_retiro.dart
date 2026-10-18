@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foodzy/core/captura.dart';
 import 'package:foodzy/core/formato.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
-import 'package:foodzy/features/alimentos/domain/cantidad.dart';
+import 'package:foodzy/features/alimentos/domain/consumo.dart';
 import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
 import 'package:foodzy/features/alimentos/domain/scanner_service.dart';
 import 'package:foodzy/features/alimentos/presentation/providers/alimentos_provider.dart';
@@ -214,16 +214,10 @@ class _PantallaRetiroState extends ConsumerState<PantallaRetiro> {
     final habitos = ref.read(habitosProvider.notifier);
     for (final s in elegidos) {
       final a = s.alimento;
-      final restante = double.parse((a.cantidad.valor - s.cantidad).toStringAsFixed(3));
-      if (restante <= 0.0001) {
-        await notifier.actualizar(a.copyWith(estado: Consumido(DateTime.now())));
-      } else {
-        await notifier.actualizar(a.copyWith(
-          cantidad: Cantidad(valor: restante, unidad: a.cantidad.unidad),
-        ));
-      }
+      final nuevo = consumir(a, s.cantidad, DateTime.now());
+      await notifier.actualizar(nuevo);
       // Solo se aprende de porciones parciales; sacar "todo" no es un hábito.
-      if (restante > 0.0001) {
+      if (nuevo.estado is Disponible) {
         await habitos.recordar(a.nombre, a.cantidad.unidad, s.cantidad);
       }
     }

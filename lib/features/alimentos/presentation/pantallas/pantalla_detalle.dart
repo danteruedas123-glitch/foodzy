@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foodzy/core/formato.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
-import 'package:foodzy/features/alimentos/domain/cantidad.dart';
+import 'package:foodzy/features/alimentos/domain/consumo.dart';
 import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
 import 'package:foodzy/features/alimentos/presentation/pantallas/pantalla_editar.dart';
 import 'package:foodzy/features/alimentos/presentation/providers/alimentos_provider.dart';
@@ -318,26 +318,11 @@ class PantallaDetalle extends ConsumerWidget {
                         );
 
                         if (consumido != null && consumido > 0) {
-                          if (consumido >= alimento.cantidad.valor) {
-                            final nuevoEstado = Consumido(DateTime.now());
-                            final actualizado = alimento.copyWith(
-                              estado: nuevoEstado,
-                            );
-                            await ref
-                                .read(alimentosProvider.notifier)
-                                .actualizar(actualizado);
-                          } else {
-                            final nuevaCantidad = Cantidad(
-                              valor: alimento.cantidad.valor - consumido,
-                              unidad: alimento.cantidad.unidad,
-                            );
-                            final actualizado = alimento.copyWith(
-                              cantidad: nuevaCantidad,
-                            );
-                            await ref
-                                .read(alimentosProvider.notifier)
-                                .actualizar(actualizado);
-                          }
+                          await ref
+                              .read(alimentosProvider.notifier)
+                              .actualizar(
+                                consumir(alimento, consumido, DateTime.now()),
+                              );
                           if (context.mounted) {
                             Navigator.of(context).pop();
                           }
