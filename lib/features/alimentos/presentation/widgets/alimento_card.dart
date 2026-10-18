@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:foodzy/core/formato.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
 import 'package:foodzy/features/alimentos/presentation/widgets/estado_visual.dart';
 
@@ -103,9 +104,6 @@ class AlimentoCard extends StatelessWidget {
     final theme = Theme.of(context);
     final visual = estadoVisual(alimento);
     final cantidad = alimento.cantidad;
-    final valor = cantidad.valor == cantidad.valor.roundToDouble()
-        ? cantidad.valor.toInt().toString()
-        : cantidad.valor.toStringAsFixed(1);
 
     return Card(
       margin: EdgeInsets.zero,
@@ -142,7 +140,7 @@ class AlimentoCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${alimento.categoria} · $valor ${cantidad.unidad}',
+                      '${alimento.categoria} · ${fmtCantidad(cantidad.valor, cantidad.unidad)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
