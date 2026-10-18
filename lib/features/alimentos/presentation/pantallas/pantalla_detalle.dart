@@ -319,15 +319,18 @@ class PantallaDetalle extends ConsumerWidget {
                           },
                         );
 
-                        if (consumido != null && consumido > 0) {
-                          await ref
-                              .read(alimentosProvider.notifier)
-                              .actualizar(
-                                consumir(alimento, consumido, DateTime.now()),
-                              );
-                          if (context.mounted) {
-                            Navigator.of(context).pop();
-                          }
+                        if (consumido != null && consumido > 0 && context.mounted) {
+                          final nuevo = consumir(alimento, consumido, DateTime.now());
+                          await _guardarConDeshacer(
+                            context,
+                            ref,
+                            antes: alimento,
+                            nuevo: nuevo,
+                            mensaje: nuevo.estado is Consumido
+                                ? '${alimento.nombre} pasó al historial como consumido.'
+                                : 'Usaste ${fmtCantidad(consumido, alimento.cantidad.unidad)} de ${alimento.nombre}. '
+                                    'Quedan ${fmtCantidad(nuevo.cantidad.valor, nuevo.cantidad.unidad)}.',
+                          );
                         }
                       },
                       icon: const Icon(Icons.restaurant),
@@ -342,21 +345,18 @@ class PantallaDetalle extends ConsumerWidget {
                   const SizedBox(width: 16),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () async {
-                        final nuevoEstado = Desechado(
-                          'Vencido o en mal estado',
-                          fecha: DateTime.now(),
-                        );
-                        final actualizado = alimento.copyWith(
-                          estado: nuevoEstado,
-                        );
-                        await ref
-                            .read(alimentosProvider.notifier)
-                            .actualizar(actualizado);
-                        if (context.mounted) {
-                          Navigator.of(context).pop();
-                        }
-                      },
+                      onPressed: () => _guardarConDeshacer(
+                        context,
+                        ref,
+                        antes: alimento,
+                        nuevo: alimento.copyWith(
+                          estado: Desechado(
+                            'Vencido o en mal estado',
+                            fecha: DateTime.now(),
+                          ),
+                        ),
+                        mensaje: '${alimento.nombre} pasó al historial como desechado.',
+                      ),
                       icon: const Icon(Icons.delete_outline),
                       label: const Text('Desechar'),
                       style: ElevatedButton.styleFrom(
@@ -374,6 +374,34 @@ class PantallaDetalle extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Guarda [nuevo], cierra el detalle y muestra un aviso con "Deshacer", que
+/// devuelve el alimento a como estaba ([antes]). Así un toque por error en
+/// "Consumir" o "Desechar" no se pierde.
+Future<void> _guardarConDeshacer(
+  BuildContext context,
+  WidgetRef ref, {
+  required Alimento antes,
+  required Alimento nuevo,
+  required String mensaje,
+}) async {
+  // Se toman antes de cerrar: después del pop esta pantalla ya no existe.
+  final notifier = ref.read(alimentosProvider.notifier);
+  final mensajero = ScaffoldMessenger.of(context);
+  final navegador = Navigator.of(context);
+
+  await notifier.actualizar(nuevo);
+  navegador.pop();
+  mensajero
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(
+      content: Text(mensaje),
+      action: SnackBarAction(
+        label: 'Deshacer',
+        onPressed: () => notifier.actualizar(antes),
+      ),
+    ));
 }
 
 class _InfoRow extends StatelessWidget {
