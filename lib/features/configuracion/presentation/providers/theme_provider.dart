@@ -12,21 +12,27 @@ class ThemeSettings {
     required this.primaryColor,
     required this.fontFamily,
     this.themeMode = ThemeMode.system,
+    this.fondoAnimado = true,
   });
 
   final Color primaryColor;
   final String fontFamily;
   final ThemeMode themeMode;
 
+  /// Fondo de alimentos en movimiento y tarjetas con desenfoque en Inicio.
+  final bool fondoAnimado;
+
   ThemeSettings copyWith({
     Color? primaryColor,
     String? fontFamily,
     ThemeMode? themeMode,
+    bool? fondoAnimado,
   }) {
     return ThemeSettings(
       primaryColor: primaryColor ?? this.primaryColor,
       fontFamily: fontFamily ?? this.fontFamily,
       themeMode: themeMode ?? this.themeMode,
+      fondoAnimado: fondoAnimado ?? this.fondoAnimado,
     );
   }
 }
@@ -35,6 +41,7 @@ class ThemeNotifier extends Notifier<ThemeSettings> {
   static const _colorKey = 'theme_color';
   static const _fontKey = 'theme_font';
   static const _modeKey = 'theme_mode';
+  static const _fondoKey = 'fondo_animado';
 
   @override
   ThemeSettings build() {
@@ -51,6 +58,7 @@ class ThemeNotifier extends Notifier<ThemeSettings> {
       primaryColor: Color(colorValue),
       fontFamily: fontName,
       themeMode: modo,
+      fondoAnimado: prefs.getBool(_fondoKey) ?? true,
     );
   }
 
@@ -70,6 +78,12 @@ class ThemeNotifier extends Notifier<ThemeSettings> {
     final prefs = ref.read(sharedPreferencesProvider);
     await prefs.setString(_modeKey, modo.name);
     state = state.copyWith(themeMode: modo);
+  }
+
+  Future<void> changeFondoAnimado(bool activo) async {
+    final prefs = ref.read(sharedPreferencesProvider);
+    await prefs.setBool(_fondoKey, activo);
+    state = state.copyWith(fondoAnimado: activo);
   }
 }
 
