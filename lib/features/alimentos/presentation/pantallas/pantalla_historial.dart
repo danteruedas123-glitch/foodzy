@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:foodzy/core/cargando_alimentos.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
 import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
 import 'package:foodzy/features/alimentos/presentation/providers/alimentos_provider.dart';
@@ -55,7 +56,7 @@ class PantallaHistorial extends ConsumerWidget {
         ],
       ),
       body: historial.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: CargandoAlimentos()),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (lista) {
           if (lista.isEmpty) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:foodzy/core/cargando_alimentos.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
 import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
 import 'package:foodzy/features/alimentos/domain/gemini_client.dart';
@@ -437,7 +438,7 @@ class _Cargando extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(width: 44, height: 44, child: CircularProgressIndicator(strokeWidth: 4)),
+            const CargandoAlimentos(),
             const SizedBox(height: 16),
             Text(texto),
           ],

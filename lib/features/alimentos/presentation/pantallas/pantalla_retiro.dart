@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foodzy/core/captura.dart';
+import 'package:foodzy/core/cargando_alimentos.dart';
 import 'package:foodzy/core/formato.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
 import 'package:foodzy/features/alimentos/domain/consumo.dart';
@@ -273,7 +274,7 @@ class _PantallaRetiroState extends ConsumerState<PantallaRetiro> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(width: 44, height: 44, child: CircularProgressIndicator(strokeWidth: 4)),
+            CargandoAlimentos(),
             SizedBox(height: 18),
             Text('Reconociendo lo que sacaste...'),
           ],
