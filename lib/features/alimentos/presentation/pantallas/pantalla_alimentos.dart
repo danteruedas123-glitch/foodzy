@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:foodzy/core/cargando_alimentos.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
 import 'package:foodzy/features/alimentos/presentation/pantallas/pantalla_detalle.dart';
 import 'package:foodzy/features/alimentos/presentation/pantallas/pantalla_historial.dart';
@@ -138,7 +139,7 @@ class _PantallaAlimentosState extends ConsumerState<PantallaAlimentos> {
         alimentos.when(
           loading: () => const SliverFillRemaining(
             hasScrollBody: false,
-            child: Center(child: CircularProgressIndicator()),
+            child: Center(child: CargandoAlimentos()),
           ),
           error: (e, _) => SliverFillRemaining(
             hasScrollBody: false,

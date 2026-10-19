@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:foodzy/core/cargando_alimentos.dart';
 import 'package:foodzy/features/alimentos/domain/historial.dart';
 import 'package:foodzy/features/alimentos/presentation/providers/reposicion_provider.dart';
 import 'package:foodzy/features/compras/domain/item_compra.dart';
@@ -109,7 +110,7 @@ class _PantallaListaCompraState extends ConsumerState<PantallaListaCompra> {
           ],
           const SizedBox(height: 18),
           if (lista.isLoading && items.isEmpty)
-            const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
+            const Center(child: Padding(padding: EdgeInsets.all(24), child: CargandoAlimentos()))
           else if (items.isEmpty)
             Padding(
               padding: const EdgeInsets.all(32),

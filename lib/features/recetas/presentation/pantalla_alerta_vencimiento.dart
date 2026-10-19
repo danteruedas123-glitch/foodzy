@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:foodzy/core/cargando_alimentos.dart';
 import 'package:foodzy/core/formato.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
 import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
@@ -102,7 +103,7 @@ class _PantallaAlertaVencimientoState
         if (alimento == null) {
           return Center(
             child: cargandoLista
-                ? const CircularProgressIndicator()
+                ? const CargandoAlimentos()
                 : const Padding(
                     padding: EdgeInsets.all(32),
                     child: Text('Ese alimento ya no está en tu despensa.',
@@ -219,7 +220,7 @@ class _PantallaAlertaVencimientoState
                   child: Center(
                     child: Column(
                       children: [
-                        CircularProgressIndicator(),
+                        CargandoAlimentos(),
                         SizedBox(height: 14),
                         Text('Pensando recetas...'),
                       ],

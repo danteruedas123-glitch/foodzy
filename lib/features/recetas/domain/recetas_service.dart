@@ -122,6 +122,7 @@ class Receta {
     required this.ingredientes,
     required this.pasos,
     this.aprovecha,
+    this.momento,
   });
 
   factory Receta.fromJson(Map<String, dynamic> j) => Receta(
@@ -130,6 +131,7 @@ class Receta {
         minutos: (j['minutos'] as num?)?.toInt() ?? 30,
         porciones: (j['porciones'] as num?)?.toInt() ?? 2,
         aprovecha: j['aprovecha']?.toString(),
+        momento: j['momento']?.toString(),
         ingredientes: [
           for (final i in (j['ingredientes'] as List? ?? const []))
             if (i is Map) IngredienteReceta.fromJson(Map<String, dynamic>.from(i)),
@@ -147,6 +149,10 @@ class Receta {
   /// Nota de qué producto por vencer aprovecha y por qué.
   final String? aprovecha;
 
+  /// Comida del día para la que es: "Desayuno", "Almuerzo" o "Cena"; `null`
+  /// si no se sabe.
+  final String? momento;
+
   List<IngredienteReceta> get faltantes =>
       ingredientes.where((i) => !i.enDespensa).toList();
 
@@ -159,6 +165,7 @@ class Receta {
         'minutos': minutos,
         'porciones': porciones,
         if (aprovecha != null) 'aprovecha': aprovecha,
+        if (momento != null) 'momento': momento,
         'ingredientes': ingredientes.map((i) => i.toJson()).toList(),
         'pasos': pasos,
       };
@@ -275,18 +282,20 @@ ${_catalogo(disponibles)}
 
 ${preferencias.paraPrompt()}
 Crea $cuantas recetas distintas, realistas y fáciles de hacer en casa.
-${momento == null ? '' : 'Todas las recetas deben ser apropiadas para el ${momento.toUpperCase()} (plato típico de esa comida del día).\n'}$foco
+${momento == null ? 'Reparte las recetas entre desayuno, almuerzo y cena (al menos una de cada una).\n' : 'Todas las recetas deben ser apropiadas para el ${momento.toUpperCase()} (plato típico de esa comida del día).\n'}$foco
 
 Reglas:
 0. Todos los alimentos del inventario están vigentes (ninguno vencido).
 $_reglasIngredientes
 6. "aprovecha": una frase que diga qué producto por vencer se aprovecha (o null).
+7. "momento": la comida del día para la que es la receta: "Desayuno", "Almuerzo" o "Cena".
 
 Devuelve SOLO un arreglo JSON con objetos de esta forma:
 $_formatoReceta
 ''');
 
-    final recetas = parsear(json, {for (final a in disponibles) a.id: a});
+    final recetas =
+        parsear(json, {for (final a in disponibles) a.id: a}, momento: momento);
     if (recetas.isEmpty) {
       throw const ScannerException(
           'No pude armar recetas con tu despensa. Intenta de nuevo.');
@@ -358,10 +367,12 @@ $_formatoReceta
     return recetas.first;
   }
 
-  /// Convierte la respuesta de la IA en recetas válidas. Es pública solo para
-  /// poder probarla; la app la usa a través de [generar] y [detallar].
+  /// Convierte la respuesta de la IA en recetas válidas. Si se da [momento],
+  /// todas quedan marcadas con él (se pidieron para esa comida). Es pública
+  /// solo para poder probarla; la app la usa a través de [generar] y
+  /// [detallar].
   @visibleForTesting
-  List<Receta> parsear(dynamic json, Map<String, Alimento> porId) {
+  List<Receta> parsear(dynamic json, Map<String, Alimento> porId, {String? momento}) {
     final lista = json is List ? json : [json];
     final recetas = <Receta>[];
     for (final r in lista) {
@@ -392,10 +403,20 @@ $_formatoReceta
         minutos: (r['minutos'] as num?)?.toInt() ?? 30,
         porciones: (r['porciones'] as num?)?.toInt() ?? 2,
         aprovecha: r['aprovecha']?.toString(),
+        momento: momento ?? _momento(r['momento']),
         ingredientes: ings,
         pasos: pasos,
       ));
     }
     return recetas;
+  }
+
+  /// Lleva lo que diga la IA ("cena", "Almuerzo ") a uno de los tres valores.
+  static String? _momento(Object? valor) {
+    final t = valor?.toString().trim().toLowerCase() ?? '';
+    if (t.startsWith('des')) return 'Desayuno';
+    if (t.startsWith('alm')) return 'Almuerzo';
+    if (t.startsWith('cen')) return 'Cena';
+    return null;
   }
 }

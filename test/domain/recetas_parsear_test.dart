@@ -167,6 +167,26 @@ void main() {
       expect(servicio.parsear('error', despensa), isEmpty);
       expect(servicio.parsear(<Object>[], despensa), isEmpty);
     });
+
+    test('normaliza la comida del día que dice la IA para poder filtrar', () {
+      final recetas = servicio.parsear([
+        recetaIA(extra: {'momento': 'desayuno'}),
+        recetaIA(extra: {'momento': ' Cena '}),
+        recetaIA(extra: {'momento': 'merienda'}),
+        recetaIA(),
+      ], despensa);
+
+      expect(recetas.map((r) => r.momento), ['Desayuno', 'Cena', null, null]);
+    });
+
+    test('si se pidieron para una comida, todas quedan con esa comida', () {
+      final recetas = servicio.parsear([
+        recetaIA(extra: {'momento': 'Almuerzo'}),
+        recetaIA(),
+      ], despensa, momento: 'Cena');
+
+      expect(recetas.map((r) => r.momento), ['Cena', 'Cena']);
+    });
   });
 
   group('Receta', () {
@@ -180,6 +200,9 @@ void main() {
       expect(vuelta.ingredientes.single.alimentoId, 'arroz-1');
       expect(vuelta.ingredientes.single.cantidadUsada, 200);
       expect(vuelta.clave, 'arroz con huevo');
+      expect(Receta.fromJson(
+              servicio.parsear([recetaIA(extra: {'momento': 'Cena'})], despensa).single.toJson())
+          .momento, 'Cena');
     });
   });
 }
