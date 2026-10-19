@@ -72,6 +72,12 @@ class _PantallaPrincipalState extends ConsumerState<PantallaPrincipal> {
   Widget build(BuildContext context) {
     ref.listen(alimentosProvider, (_, _) => _sincronizar());
     ref.listen(notificacionesProvider, (_, _) => _sincronizar());
+    // Avisa en cualquier pestaña si la nube rechaza un cambio de la despensa.
+    ref.listen(avisoGuardadoProvider, (_, aviso) {
+      if (aviso == null) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(aviso.mensaje)));
+    });
 
     final ancho = MediaQuery.sizeOf(context).width;
     final ancha = ancho >= 800;
