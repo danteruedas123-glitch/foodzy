@@ -51,15 +51,20 @@ EstadisticasMes estadisticasDelMes(List<Alimento> alimentos, DateTime mes) {
   var desperdiciado = 0.0;
   var consumidos = 0;
   var desechados = 0;
+  // Se agrupa por claveNombre para que "Leche" y "leche" (o "Lácteos" y
+  // "lacteos") cuenten como lo mismo; se muestra el primer nombre que aparezca.
   final porCategoria = <String, double>{};
   final porNombre = <String, double>{};
+  final nombres = <String, String>{};
 
   for (final a in alimentos) {
     // Gasto: lo comprado en el mes.
     final ingreso = a.ingreso;
     if (a.precio != null && ingreso != null && _mismoMes(ingreso, mes)) {
       gastado += a.precio!;
-      porCategoria[a.categoria] = (porCategoria[a.categoria] ?? 0) + a.precio!;
+      final k = claveNombre(a.categoria);
+      nombres.putIfAbsent('cat:$k', () => a.categoria.trim());
+      porCategoria[k] = (porCategoria[k] ?? 0) + a.precio!;
     }
 
     // Consumo y desperdicio: lo que salió de la despensa en el mes.
@@ -71,11 +76,17 @@ EstadisticasMes estadisticasDelMes(List<Alimento> alimentos, DateTime mes) {
       desechados++;
       final perdido = costoDesperdicio(a);
       desperdiciado += perdido;
-      if (perdido > 0) porNombre[a.nombre] = (porNombre[a.nombre] ?? 0) + perdido;
+      if (perdido > 0) {
+        final k = claveNombre(a.nombre);
+        nombres.putIfAbsent('ali:$k', () => a.nombre.trim());
+        porNombre[k] = (porNombre[k] ?? 0) + perdido;
+      }
     }
   }
 
-  final top = porNombre.entries.map((e) => (e.key, e.value)).toList()
+  final top = porNombre.entries
+      .map((e) => (nombres['ali:${e.key}']!, e.value))
+      .toList()
     ..sort((a, b) => b.$2.compareTo(a.$2));
 
   return EstadisticasMes(
@@ -84,7 +95,9 @@ EstadisticasMes estadisticasDelMes(List<Alimento> alimentos, DateTime mes) {
     desperdiciado: desperdiciado,
     consumidos: consumidos,
     desechados: desechados,
-    gastoPorCategoria: porCategoria,
+    gastoPorCategoria: {
+      for (final e in porCategoria.entries) nombres['cat:${e.key}']!: e.value,
+    },
     topDesperdicio: top.take(3).toList(),
   );
 }

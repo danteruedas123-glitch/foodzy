@@ -6,6 +6,7 @@ import 'package:foodzy/core/nube.dart';
 import 'package:foodzy/features/alimentos/data/alimentos_db.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
 import 'package:foodzy/features/alimentos/domain/alimentos_repository.dart';
+import 'package:foodzy/features/alimentos/domain/busqueda.dart';
 import 'package:foodzy/features/alimentos/domain/cantidad.dart';
 import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
 import 'package:foodzy/features/alimentos/domain/historial.dart';
@@ -118,7 +119,7 @@ class AlimentosNotifier extends AsyncNotifier<List<Alimento>> {
       // factura con varios productos) se quedaba trabado en el primero.
       final actual = state.value ?? const <Alimento>[];
       state = AsyncData([...actual.where((a) => a.id != alimento.id), alimento]);
-      unawaited(_repo.guardar(alimento).catchError((_) {}));
+      unawaited(_repo.guardar(alimento).catchError(_alFallarEnNube));
       return;
     }
     await _repo.guardar(alimento);
@@ -133,7 +134,7 @@ class AlimentosNotifier extends AsyncNotifier<List<Alimento>> {
       if (actual != null) {
         state = AsyncData([for (final a in actual) a.id == alimento.id ? alimento : a]);
       }
-      unawaited(_repo.guardar(alimento).catchError((_) {}));
+      unawaited(_repo.guardar(alimento).catchError(_alFallarEnNube));
       return;
     }
     await _repo.guardar(alimento);
@@ -146,11 +147,26 @@ class AlimentosNotifier extends AsyncNotifier<List<Alimento>> {
       if (actual != null) {
         state = AsyncData(actual.where((a) => a.id != id).toList());
       }
-      unawaited(_repo.eliminar(id).catchError((_) {}));
+      unawaited(_repo.eliminar(id).catchError(_alFallarEnNube));
       return;
     }
     await _repo.eliminar(id);
     await recargar();
+  }
+
+  /// En la nube el cambio se muestra antes de que Firestore lo confirme. Si
+  /// lo rechaza (por ejemplo, por las reglas de seguridad), se avisa y se
+  /// vuelve a leer la despensa para no mostrar algo que no quedó guardado.
+  Future<void> _alFallarEnNube(Object _) async {
+    ref.read(avisoGuardadoProvider.notifier).state = AvisoGuardado(
+      'No se pudo guardar el último cambio de tu despensa en la nube. '
+      'Revisa que sigas en el hogar e inténtalo de nuevo.',
+    );
+    try {
+      state = AsyncData(await _repo.obtenerTodos());
+    } catch (_) {
+      // Sin respuesta de la nube: el flujo en tiempo real la corregirá.
+    }
   }
 
   /// Borra varios alimentos de una vez y limpia las fotos que queden sin uso.
@@ -189,6 +205,17 @@ final alimentosProvider =
   AlimentosNotifier.new,
 );
 
+/// Un aviso para la persona cuando la nube rechaza un cambio de la despensa.
+/// No es `const`: cada fallo es un objeto distinto, así que dos fallos
+/// seguidos con el mismo texto se avisan las dos veces.
+class AvisoGuardado {
+  AvisoGuardado(this.mensaje);
+  final String mensaje;
+}
+
+/// El último aviso de guardado fallido. Lo muestra la pantalla de la despensa.
+final avisoGuardadoProvider = StateProvider<AvisoGuardado?>((ref) => null);
+
 final searchQueryProvider = StateProvider<String>((ref) => '');
 
 /// Filtros de la despensa. La despensa solo muestra lo que sigue disponible;
@@ -219,7 +246,7 @@ final historialProvider = Provider<AsyncValue<List<Alimento>>>((ref) {
 
 final alimentosFiltradosProvider = Provider<AsyncValue<List<Alimento>>>((ref) {
   final activos = ref.watch(despensaActivaProvider);
-  final busqueda = ref.watch(searchQueryProvider).toLowerCase();
+  final busqueda = ref.watch(searchQueryProvider);
   final filtro = ref.watch(filtroEstadoProvider);
   final ubicacion = ref.watch(filtroUbicacionProvider);
 
@@ -233,9 +260,7 @@ final alimentosFiltradosProvider = Provider<AsyncValue<List<Alimento>>>((ref) {
       };
       if (!pasa) return false;
       if (ubicacion != null && a.ubicacion != ubicacion) return false;
-      if (busqueda.isEmpty) return true;
-      return a.nombre.toLowerCase().contains(busqueda) ||
-          a.categoria.toLowerCase().contains(busqueda);
+      return coincideBusqueda(a, busqueda);
     }).toList();
   });
 });

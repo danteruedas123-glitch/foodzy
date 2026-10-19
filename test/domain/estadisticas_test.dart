@@ -86,6 +86,34 @@ void main() {
     expect(vacio.porcentajeDesperdicio, 0);
   });
 
+  test('lo que más se perdió junta el mismo producto escrito distinto', () {
+    Alimento perdido(String id, String nombre, double precio) => a(
+          id: id,
+          nombre: nombre,
+          precio: precio,
+          estado: Desechado('Vencido', fecha: DateTime(2026, 9, 10)),
+        );
+
+    final r = estadisticasDelMes([
+      perdido('1', 'Leche', 3000),
+      perdido('2', 'leche ', 2000),
+      perdido('3', 'Pan', 4000),
+    ], septiembre);
+
+    expect(r.topDesperdicio.length, 2);
+    expect(r.topDesperdicio.first, ('Leche', 5000.0));
+    expect(r.topDesperdicio.last, ('Pan', 4000.0));
+  });
+
+  test('el gasto por categoría junta la misma categoría con o sin tilde', () {
+    final r = estadisticasDelMes([
+      a(id: '1', precio: 5000, categoria: 'Lácteos', compra: DateTime(2026, 9, 3)),
+      a(id: '2', precio: 1000, categoria: 'lacteos', compra: DateTime(2026, 9, 8)),
+    ], septiembre);
+
+    expect(r.gastoPorCategoria, {'Lácteos': 6000.0});
+  });
+
   test('ultimosMeses devuelve seis meses ordenados', () {
     final m = ultimosMeses(const [], septiembre);
     expect(m.length, 6);

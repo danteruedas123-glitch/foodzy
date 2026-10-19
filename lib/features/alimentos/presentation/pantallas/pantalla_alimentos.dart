@@ -35,6 +35,14 @@ class _PantallaAlimentosState extends ConsumerState<PantallaAlimentos> {
     final alimentos = ref.watch(alimentosFiltradosProvider);
     final filtro = ref.watch(filtroEstadoProvider);
 
+    // Si la nube rechaza un cambio, se avisa aquí. También se ve sobre el
+    // detalle y "Sacar comida", que se abren encima de esta pantalla.
+    ref.listen(avisoGuardadoProvider, (_, aviso) {
+      if (aviso == null) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(aviso.mensaje)));
+    });
+
     return CustomScrollView(
       slivers: [
         SliverAppBar(
