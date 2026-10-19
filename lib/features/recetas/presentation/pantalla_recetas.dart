@@ -17,20 +17,21 @@ class RecetasNotifier extends Notifier<AsyncValue<List<Receta>>?> {
   @override
   AsyncValue<List<Receta>>? build() => null;
 
+  /// Pide recetas para la comida elegida; con "Cualquiera" trae de las tres
+  /// para que luego se puedan filtrar sin volver a llamar a la IA.
   Future<void> generar() async {
     state = const AsyncValue.loading();
     final despensa = ref.read(alimentosProvider).value ?? const <Alimento>[];
     final prefs = ref.read(preferenciasProvider);
     final momento = ref.read(momentoProvider);
     state = await AsyncValue.guard(
-      () => ref
-          .read(recetasServiceProvider)
-          .generar(despensa, cuantas: 4, momento: momento, preferencias: prefs),
+      () => ref.read(recetasServiceProvider).generar(despensa,
+          cuantas: momento == null ? 6 : 4, momento: momento, preferencias: prefs),
     );
   }
 }
 
-/// Comida del día para la que se piden recetas; `null` = cualquiera.
+/// Comida del día por la que se filtran las recetas; `null` = cualquiera.
 class MomentoNotifier extends Notifier<String?> {
   @override
   String? build() => null;
@@ -150,14 +151,7 @@ class _Sugeridas extends ConsumerWidget {
                   ChoiceChip(
                     label: Text('${m.$3} ${m.$2}'),
                     selected: momento == m.$1,
-                    onSelected: estado is AsyncLoading
-                        ? null
-                        : (_) {
-                            ref.read(momentoProvider.notifier).elegir(m.$1);
-                            if (despensa.isNotEmpty) {
-                              ref.read(recetasProvider.notifier).generar();
-                            }
-                          },
+                    onSelected: (_) => ref.read(momentoProvider.notifier).elegir(m.$1),
                   ),
               ],
             ),
@@ -169,7 +163,7 @@ class _Sugeridas extends ConsumerWidget {
             child: _Cabecera(
               titulo: momento == null
                   ? '¿Qué cocino hoy?'
-                  : '¿Qué preparo para el ${momento.toLowerCase()}?',
+                  : '¿Qué preparo para ${momento == 'Cena' ? 'la' : 'el'} ${momento.toLowerCase()}?',
               texto: despensa.isEmpty
                   ? 'Añade alimentos a tu despensa para recibir ideas.'
                   : urgentes > 0
@@ -197,20 +191,32 @@ class _Sugeridas extends ConsumerWidget {
               hasScrollBody: false,
               child: _Mensaje('😕', e is ScannerException ? e.mensaje : e.toString()),
             ),
-            data: (recetas) => SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
-              sliver: SliverList.separated(
-                itemCount: recetas.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 12),
-                itemBuilder: (_, i) => RecetaCard(
-                  receta: recetas[i],
-                  abierta: i == 0,
-                  favorita: favoritas.any((f) => f.clave == recetas[i].clave),
-                  onFavorita: () => ref.read(favoritasProvider.notifier).alternar(recetas[i]),
-                  onCocinar: () => cocinarReceta(context, recetas[i]),
+            data: (todas) {
+              final recetas = momento == null
+                  ? todas
+                  : todas.where((r) => r.momento == momento).toList();
+              if (recetas.isEmpty) {
+                return SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: _Mensaje('🍳',
+                      'No hay recetas de ${momento?.toLowerCase()} entre las sugeridas.\nToca "Generar otras" y te traigo algunas.'),
+                );
+              }
+              return SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
+                sliver: SliverList.separated(
+                  itemCount: recetas.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
+                  itemBuilder: (_, i) => RecetaCard(
+                    receta: recetas[i],
+                    abierta: i == 0,
+                    favorita: favoritas.any((f) => f.clave == recetas[i].clave),
+                    onFavorita: () => ref.read(favoritasProvider.notifier).alternar(recetas[i]),
+                    onCocinar: () => cocinarReceta(context, recetas[i]),
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
       ],
     );
