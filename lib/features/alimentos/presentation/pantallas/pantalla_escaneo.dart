@@ -119,11 +119,11 @@ class _PantallaEscaneoState extends ConsumerState<PantallaEscaneo> {
     var n = 0;
     final base = DateTime.now().microsecondsSinceEpoch;
     try {
-      for (final d in _items!) {
-        await notifier.agregar(
+      // Todos de una vez: una sola escritura y un solo cambio en pantalla.
+      await notifier.guardarVarios([
+        for (final d in _items!)
           d.alimento.conIdYFotos('$base-${n++}', [widget.imageFile.path]),
-        );
-      }
+      ]);
       // Marcar la lista de compras es secundario: no debe dejar la pantalla esperando.
       await ref
           .read(listaCompraProvider.notifier)

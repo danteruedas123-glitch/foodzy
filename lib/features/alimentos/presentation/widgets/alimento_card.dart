@@ -40,14 +40,19 @@ class FotoAlimento extends StatelessWidget {
 
     final path = alimento.fotos.first;
     final esRed = path.startsWith('http') || path.startsWith('blob:');
+    // La foto se decodifica al tamaño en que se ve, no a su tamaño completo
+    // (una foto de 1800 px ocupa ~15 MB en memoria para una miniatura de
+    // 64). El doble del tamaño visible mantiene nítidas las fotos
+    // horizontales, que se recortan en cuadrado.
+    final ancho = (tamano * MediaQuery.devicePixelRatioOf(context) * 2).round();
     Widget imagen;
     if (esRed) {
-      imagen = Image.network(path, fit: BoxFit.cover,
+      imagen = Image.network(path, fit: BoxFit.cover, cacheWidth: ancho,
           errorBuilder: (_, _, _) => fondo);
     } else if (kIsWeb) {
       return fondo;
     } else {
-      imagen = Image.file(File(path), fit: BoxFit.cover,
+      imagen = Image.file(File(path), fit: BoxFit.cover, cacheWidth: ancho,
           errorBuilder: (_, _, _) => fondo);
     }
     return ClipRRect(

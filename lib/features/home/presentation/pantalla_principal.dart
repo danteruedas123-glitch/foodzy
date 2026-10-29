@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foodzy/core/notificaciones.dart';
@@ -49,6 +51,7 @@ class _PantallaPrincipalState extends ConsumerState<PantallaPrincipal> {
 
   @override
   void dispose() {
+    _esperaAvisos?.cancel();
     _avisos.alimentoTocado.removeListener(_abrirAviso);
     super.dispose();
   }
@@ -62,10 +65,19 @@ class _PantallaPrincipalState extends ConsumerState<PantallaPrincipal> {
     ));
   }
 
+  Timer? _esperaAvisos;
+
+  /// Reprograma los avisos un segundo después del último cambio: guardar una
+  /// factura o recibir varios cambios de la nube seguidos se agrupa en una
+  /// sola reprogramación en vez de una por cambio.
   void _sincronizar() {
-    final lista = ref.read(alimentosProvider).value;
-    if (lista == null) return;
-    _avisos.reprogramar(lista, ref.read(notificacionesProvider));
+    _esperaAvisos?.cancel();
+    _esperaAvisos = Timer(const Duration(seconds: 1), () {
+      if (!mounted) return;
+      final lista = ref.read(alimentosProvider).value;
+      if (lista == null) return;
+      _avisos.reprogramar(lista, ref.read(notificacionesProvider));
+    });
   }
 
   @override

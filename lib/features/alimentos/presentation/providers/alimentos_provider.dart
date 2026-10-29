@@ -18,7 +18,9 @@ import 'package:foodzy/features/nube/hogar_provider.dart';
 /// Dónde viven los alimentos: en Firestore (compartidos con el hogar) si hay
 /// cuenta en la nube, o en la base local del teléfono si no.
 final alimentosRepositoryProvider = FutureProvider<AlimentosRepository>((ref) async {
-  if (Nube.disponible && ref.watch(authProvider).esNube) {
+  // Solo importa si hay cuenta en la nube; el hogar ya cambia si cambia la
+  // cuenta. Así no se reconstruye cuando Firebase renueva la sesión.
+  if (Nube.disponible && ref.watch(authProvider.select((a) => a.esNube))) {
     // Si la nube no responde (sin internet o base sin crear), se usa el teléfono.
     final hogar = await ref.watch(hogarProvider.future).then<Hogar?>((h) => h, onError: (_) => null);
     if (hogar != null) return FirestoreAlimentosRepository(hogar.id);
@@ -37,7 +39,28 @@ class AlimentosNotifier extends AsyncNotifier<List<Alimento>> {
     final prefs = ref.read(sharedPreferencesProvider);
 
     if (_repo case final FirestoreAlimentosRepository nube) {
-      var items = await nube.obtenerTodos();
+      // El flujo en tiempo real trae la carga inicial (su primer evento) y
+      // luego los cambios de otros miembros del hogar. Antes se leía además
+      // la colección por separado, así que se descargaba dos veces.
+      final inicial = Completer<List<Alimento>>();
+      final sub = nube.flujo().listen(
+        (l) {
+          if (inicial.isCompleted) {
+            state = AsyncData(l);
+          } else {
+            inicial.complete(l);
+          }
+        },
+        onError: (Object e, StackTrace st) {
+          if (!inicial.isCompleted) inicial.completeError(e, st);
+        },
+        // Si el flujo termina sin datos, se pide la lista una vez.
+        onDone: () {
+          if (!inicial.isCompleted) inicial.complete(nube.obtenerTodos());
+        },
+      );
+      ref.onDispose(sub.cancel);
+      var items = await inicial.future;
 
       // Primera vez con la cuenta: se sube lo que había en el teléfono.
       final marca = 'migrado_${ref.read(authProvider).uid}';
@@ -53,11 +76,6 @@ class AlimentosNotifier extends AsyncNotifier<List<Alimento>> {
         }
         await prefs.setBool(marca, true);
       }
-
-      // Cambios de otros miembros del hogar, en tiempo real. El primer evento
-      // es la carga inicial, que ya tenemos.
-      final sub = nube.flujo().skip(1).listen((l) => state = AsyncData(l));
-      ref.onDispose(sub.cancel);
       return items;
     }
 
@@ -113,32 +131,38 @@ class AlimentosNotifier extends AsyncNotifier<List<Alimento>> {
     state = await AsyncValue.guard(() => _repo.obtenerTodos());
   }
 
-  Future<void> agregar(Alimento alimento) async {
-    if (_enNube) {
-      // Sin esperar al servidor: con mala señal el guardado en cadena (una
-      // factura con varios productos) se quedaba trabado en el primero.
-      final actual = state.value ?? const <Alimento>[];
-      state = AsyncData([...actual.where((a) => a.id != alimento.id), alimento]);
-      unawaited(_repo.guardar(alimento).catchError(_alFallarEnNube));
-      return;
-    }
-    await _repo.guardar(alimento);
-    await recargar();
-  }
+  Future<void> agregar(Alimento alimento) => guardarVarios([alimento]);
 
-  Future<void> actualizar(Alimento alimento) async {
-    if (_enNube) {
-      // El cambio se ve al instante; Firestore confirma después (con mala
-      // señal la espera por el servidor dejaba la pantalla "congelada").
-      final actual = state.value;
-      if (actual != null) {
-        state = AsyncData([for (final a in actual) a.id == alimento.id ? alimento : a]);
-      }
-      unawaited(_repo.guardar(alimento).catchError(_alFallarEnNube));
+  Future<void> actualizar(Alimento alimento) => guardarVarios([alimento]);
+
+  /// Añade o reemplaza varios alimentos de una vez (por ejemplo, todos los
+  /// de una factura): una sola escritura y un solo cambio en pantalla, en vez
+  /// de uno por alimento.
+  Future<void> guardarVarios(Iterable<Alimento> alimentos) async {
+    final lista = alimentos.toList();
+    if (lista.isEmpty) return;
+
+    if (_repo case final FirestoreAlimentosRepository nube) {
+      // El cambio se ve al instante y Firestore confirma después: con mala
+      // señal, esperar al servidor dejaba la pantalla "congelada" y el
+      // guardado en cadena se quedaba trabado en el primero.
+      final actual = state.value ?? const <Alimento>[];
+      state = AsyncData(_conGuardados(actual, lista));
+      final escritura =
+          lista.length == 1 ? nube.guardar(lista.single) : nube.guardarVarios(lista);
+      unawaited(escritura.catchError(_alFallarEnNube));
       return;
     }
-    await _repo.guardar(alimento);
-    await recargar();
+
+    final repo = _repo;
+    if (repo is AlimentosDB) {
+      await repo.guardarVarios(lista);
+    } else {
+      for (final a in lista) {
+        await repo.guardar(a);
+      }
+    }
+    await _mostrarLocal((actual) => _conGuardados(actual, lista));
   }
 
   Future<void> eliminar(String id) async {
@@ -151,7 +175,23 @@ class AlimentosNotifier extends AsyncNotifier<List<Alimento>> {
       return;
     }
     await _repo.eliminar(id);
-    await recargar();
+    await _mostrarLocal((actual) => actual.where((a) => a.id != id).toList());
+  }
+
+  /// En el teléfono, después de guardar se actualiza la lista que ya está en
+  /// memoria en vez de volver a leer y decodificar toda la base.
+  Future<void> _mostrarLocal(List<Alimento> Function(List<Alimento>) cambio) async {
+    final actual = state.value;
+    if (actual == null) return recargar();
+    state = AsyncData(cambio(actual));
+  }
+
+  /// [actual] con [nuevos] reemplazando a los de su mismo id (en su sitio) y
+  /// los que no estaban, al final.
+  static List<Alimento> _conGuardados(List<Alimento> actual, List<Alimento> nuevos) {
+    final porId = {for (final a in nuevos) a.id: a};
+    final reemplazados = [for (final a in actual) porId.remove(a.id) ?? a];
+    return [...reemplazados, ...porId.values];
   }
 
   /// En la nube el cambio se muestra antes de que Firestore lo confirme. Si
@@ -174,10 +214,24 @@ class AlimentosNotifier extends AsyncNotifier<List<Alimento>> {
   Future<int> eliminarVarios(Iterable<Alimento> aBorrar) async {
     final lista = aBorrar.toList();
     if (lista.isEmpty) return 0;
-    for (final a in lista) {
-      await _repo.eliminar(a.id);
+    final ids = {for (final a in lista) a.id};
+
+    final repo = _repo;
+    if (repo case final FirestoreAlimentosRepository nube) {
+      // Una sola escritura, sin esperar al servidor (igual que los demás
+      // cambios en la nube); si la rechaza, se avisa y se corrige.
+      unawaited(nube.eliminarVarios(ids).catchError(_alFallarEnNube));
+    } else if (repo is AlimentosDB) {
+      await repo.eliminarVarios(ids);
+    } else {
+      for (final id in ids) {
+        await repo.eliminar(id);
+      }
     }
-    final restantes = await _repo.obtenerTodos();
+
+    // Lo que queda se calcula en memoria en vez de volver a leer todo.
+    final antes = state.value ?? await repo.obtenerTodos();
+    final restantes = antes.where((a) => !ids.contains(a.id)).toList();
     await borrarFotosHuerfanas(
       lista.expand((a) => a.fotos),
       restantes.expand((a) => a.fotos).toSet(),

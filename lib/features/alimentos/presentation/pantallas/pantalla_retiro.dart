@@ -213,13 +213,15 @@ class _PantallaRetiroState extends ConsumerState<PantallaRetiro> {
     setState(() => _guardando = true);
     final notifier = ref.read(alimentosProvider.notifier);
     final habitos = ref.read(habitosProvider.notifier);
-    for (final s in elegidos) {
-      final a = s.alimento;
-      final nuevo = consumir(a, s.cantidad, DateTime.now());
-      await notifier.actualizar(nuevo);
+    final ahora = DateTime.now();
+    final nuevos = [for (final s in elegidos) consumir(s.alimento, s.cantidad, ahora)];
+    // Todos de una vez: una sola escritura y un solo cambio en pantalla.
+    await notifier.guardarVarios(nuevos);
+    for (var i = 0; i < elegidos.length; i++) {
+      final s = elegidos[i];
       // Solo se aprende de porciones parciales; sacar "todo" no es un hábito.
-      if (nuevo.estado is Disponible) {
-        await habitos.recordar(a.nombre, a.cantidad.unidad, s.cantidad);
+      if (nuevos[i].estado is Disponible) {
+        await habitos.recordar(s.alimento.nombre, s.alimento.cantidad.unidad, s.cantidad);
       }
     }
     if (!mounted) return;

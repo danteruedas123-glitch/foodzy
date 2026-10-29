@@ -16,11 +16,15 @@ class PantallaDetalle extends ConsumerWidget {
 
   final Alimento alimento;
 
-  Widget _buildImageHeader() {
+  Widget _buildImageHeader(BuildContext context) {
     if (alimento.fotos.isEmpty) return const SizedBox.shrink();
 
     final path = alimento.fotos.first;
     final isNetwork = path.startsWith('http') || path.startsWith('blob:');
+    // Se decodifica al ancho de la pantalla, no al tamaño completo de la foto.
+    final ancho = (MediaQuery.sizeOf(context).width *
+            MediaQuery.devicePixelRatioOf(context))
+        .round();
 
     return Container(
       width: double.infinity,
@@ -42,6 +46,7 @@ class PantallaDetalle extends ConsumerWidget {
             ? Image.network(
                 path,
                 fit: BoxFit.cover,
+                cacheWidth: ancho,
                 errorBuilder: (context, error, stackTrace) => const Center(
                   child: Icon(Icons.broken_image, size: 50, color: Colors.grey),
                 ),
@@ -57,6 +62,7 @@ class PantallaDetalle extends ConsumerWidget {
                   : Image.file(
                       File(path),
                       fit: BoxFit.cover,
+                      cacheWidth: ancho,
                       errorBuilder: (context, error, stackTrace) =>
                           const Center(
                             child: Icon(
@@ -136,7 +142,7 @@ class PantallaDetalle extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildImageHeader(),
+            _buildImageHeader(context),
             // Tarjeta de información principal
             Card(
               elevation: 3,

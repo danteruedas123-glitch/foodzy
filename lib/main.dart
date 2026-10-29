@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,9 +15,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final sharedPreferences = await SharedPreferences.getInstance();
-  await Nube.iniciar();
-  await NotificacionesService.instancia.iniciar();
+  // Preferencias y Firebase se preparan a la vez, no una después de otra.
+  final (sharedPreferences, _) =
+      await (SharedPreferences.getInstance(), Nube.iniciar()).wait;
+  // Las notificaciones (zonas horarias incluidas) se preparan con la app ya
+  // en pantalla. Si se abrió tocando un aviso, este llega igual por
+  // `alimentoTocado` y lo abre la pantalla principal.
+  unawaited(NotificacionesService.instancia.iniciar());
 
   runApp(
     ProviderScope(
@@ -98,7 +104,8 @@ class FoodzyApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(themeProvider);
-    final auth = ref.watch(authProvider);
+    // Solo importa si hay sesión: cambiar el nombre o la foto no reconstruye la app.
+    final autenticado = ref.watch(authProvider.select((a) => a.isAuthenticated));
 
     return MaterialApp(
       title: 'Foodzy',
@@ -106,7 +113,7 @@ class FoodzyApp extends ConsumerWidget {
       themeMode: s.themeMode,
       theme: _tema(s, Brightness.light),
       darkTheme: _tema(s, Brightness.dark),
-      home: auth.isAuthenticated
+      home: autenticado
           ? const PantallaPrincipal()
           : const PantallaLogin(),
     );

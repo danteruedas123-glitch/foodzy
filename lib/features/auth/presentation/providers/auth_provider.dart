@@ -26,6 +26,20 @@ class AuthState {
   final String? uid;
 
   bool get esNube => uid != null;
+
+  // Comparar por valor evita avisar a toda la app cuando Firebase vuelve a
+  // emitir el mismo usuario (al suscribirse y al renovar la sesión cada hora).
+  @override
+  bool operator ==(Object other) =>
+      other is AuthState &&
+      other.isAuthenticated == isAuthenticated &&
+      other.userName == userName &&
+      other.email == email &&
+      other.uid == uid &&
+      other.fotoUrl == fotoUrl;
+
+  @override
+  int get hashCode => Object.hash(isAuthenticated, userName, email, uid, fotoUrl);
 }
 
 /// Error de autenticación con un mensaje listo para mostrar.
@@ -71,6 +85,10 @@ class AuthNotifier extends Notifier<AuthState> {
     if (Nube.disponible) return _construirNube();
     return _construirLocal();
   }
+
+  /// Solo se avisa si algo cambió de verdad.
+  @override
+  bool updateShouldNotify(AuthState previous, AuthState next) => previous != next;
 
   // ── Modo nube (Firebase) ────────────────────────────────────────────────
 
