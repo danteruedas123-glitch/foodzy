@@ -16,17 +16,18 @@ abstract final class FirebaseOpciones {
   static const _bucket = 'fooddzy.firebasestorage.app';
 
   // iPhone (GoogleService-Info.plist): API_KEY, GOOGLE_APP_ID y CLIENT_ID.
-  static const _iosApiKey = '';
-  static const _iosAppId = '';
+  static const _iosApiKey = 'AIzaSyBLm7KWeGApvI9kgaqU7-M2JWzOz3zQnMs';
+  static const _iosAppId = '1:235830420548:ios:34826c4873ab71ea9f0811';
 
   /// Para entrar con Google en iPhone. Su versión invertida va también en
   /// `ios/Runner/Info.plist` (CFBundleURLSchemes).
-  static const iosClientId = '';
+  static const iosClientId =
+      '235830420548-0trukmeq0g8rito4j9mmjsb9008q02uh.apps.googleusercontent.com';
   static const iosBundleId = 'com.foodzy.app';
 
   // Web (bloque firebaseConfig): apiKey y appId.
-  static const _webApiKey = '';
-  static const _webAppId = '';
+  static const _webApiKey = 'AIzaSyC6OfZunrqQY-IGk1pjHDqIsN_fva8ngbk';
+  static const _webAppId = '1:235830420548:web:04aceb117b94a8909f0811';
 
   static bool get _esIphone => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 

@@ -51,7 +51,7 @@ que sugiere).
 
 ## App web (cualquier iPhone, sin cables)
 
-1. Abre en **Safari**: https://danteruedas123-glitch.github.io/web_foodzy/app/
+1. Abre en **Safari**: https://fooddzy.web.app
 2. Toca **Compartir** (el cuadrado con la flecha) → **Agregar a inicio**.
 3. Queda el ícono de Foodzy en la pantalla de inicio y se abre como una app.
 
@@ -66,6 +66,6 @@ tiene son los avisos de vencimiento con la app cerrada.
 - La compilación de iPhone corre sola al subir cambios a `main`,
   `mejoras-foodzy` o `soporte-iphone`, y también a mano desde la pestaña
   **Actions → App para iPhone → Run workflow**.
-- La versión web se compila con
-  `flutter build web --release --base-href /web_foodzy/app/ --dart-define=COMPRAS_PRUEBA=true`
-  y se copia a la carpeta `app/` del repositorio `web_foodzy`.
+- La versión web se publica en Firebase Hosting (https://fooddzy.web.app):
+  `flutter build web --release --dart-define=COMPRAS_PRUEBA=true` y luego
+  `firebase deploy --only hosting` (configuración en `firebase.json`).
