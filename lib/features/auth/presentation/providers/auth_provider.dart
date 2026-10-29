@@ -1,6 +1,9 @@
 import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+import 'package:foodzy/core/firebase_opciones.dart';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foodzy/core/nube.dart';
@@ -69,6 +72,8 @@ String _traducir(FirebaseAuthException e) {
       return 'Demasiados intentos. Espera un momento e inténtalo de nuevo.';
     case 'network-request-failed':
       return 'Sin conexión a internet.';
+    case 'popup-blocked':
+      return 'El navegador bloqueó la ventana de Google. Permite ventanas emergentes e intenta de nuevo.';
     case 'operation-not-allowed':
       return 'El acceso con correo no está activado en Firebase.';
     default:
@@ -150,10 +155,25 @@ class AuthNotifier extends Notifier<AuthState> {
     if (!Nube.disponible) {
       throw const AuthError('Entrar con Google requiere el modo nube.');
     }
+    // En la web, Firebase abre su propia ventana de Google.
+    if (kIsWeb) {
+      try {
+        await FirebaseAuth.instance.signInWithPopup(GoogleAuthProvider());
+        return true;
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'popup-closed-by-user' || e.code == 'cancelled-popup-request') {
+          return false;
+        }
+        throw AuthError(_traducir(e));
+      }
+    }
     try {
       final google = GoogleSignIn.instance;
       if (!_googleListo) {
-        await google.initialize();
+        // En iPhone, Google necesita el id de cliente de iOS de Firebase.
+        final iphone = defaultTargetPlatform == TargetPlatform.iOS &&
+            FirebaseOpciones.iosClientId.isNotEmpty;
+        await google.initialize(clientId: iphone ? FirebaseOpciones.iosClientId : null);
         _googleListo = true;
       }
       final cuenta = await google.authenticate();

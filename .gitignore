@@ -55,3 +55,6 @@ firestore-tests/node_modules/
 firestore-tests/package-lock.json
 firestore-tests/firestore-debug.log
 firestore-tests/*.log
+
+# Caché de Firebase Hosting (se crea al publicar)
+.firebase/
