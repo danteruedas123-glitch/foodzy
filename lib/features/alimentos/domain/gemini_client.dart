@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:foodzy/core/env.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -114,11 +115,13 @@ class GeminiClient {
       var huboSaturacion = false;
       for (final nombre in _modelosEnOrden()) {
         if (descartados.contains(nombre)) continue;
+        final intento = Stopwatch()..start();
         try {
           texto = await _generar(nombre, partes);
           _ultimoQueRespondio = nombre;
           break;
         } on _ErrorGemini catch (e) {
+          debugPrint('[IA] $nombre falló tras ${intento.elapsedMilliseconds}ms: $e');
           ultimoError = e.toString();
           final m = ultimoError.toLowerCase();
           if (m.contains('api key') || m.contains('api_key')) {
@@ -135,6 +138,7 @@ class GeminiClient {
             if (e.codigo == 404) _noExisten.add(nombre);
           }
         } catch (e) {
+          debugPrint('[IA] $nombre falló tras ${intento.elapsedMilliseconds}ms: $e');
           ultimoError = e.toString();
           huboSaturacion = true; // tiempo agotado o red: se reintenta luego
         }
@@ -185,6 +189,7 @@ class GeminiClient {
     List<Map<String, dynamic>> partes, {
     required String? nivel,
   }) async {
+    final reloj = Stopwatch()..start();
     final respuesta = await _http
         .post(
           Uri.parse('$_base/$modelo:generateContent'),
@@ -206,6 +211,7 @@ class GeminiClient {
         .timeout(const Duration(seconds: 40));
 
     final cuerpo = utf8.decode(respuesta.bodyBytes);
+    reloj.stop();
     Object? json;
     try {
       json = jsonDecode(cuerpo);
@@ -219,6 +225,16 @@ class GeminiClient {
           ? '${error['status'] ?? ''} ${error['message'] ?? ''}'.trim()
           : cuerpo;
       throw _ErrorGemini(respuesta.statusCode, mensaje);
+    }
+
+    // Tiempos y tokens de cada respuesta, para saber qué demora el escaneo
+    // (se ve con `adb logcat -s flutter`).
+    final uso = json is Map ? json['usageMetadata'] : null;
+    if (uso is Map) {
+      final kb = partes.fold<int>(0, (n, p) => n + jsonEncode(p).length) ~/ 1024;
+      debugPrint('[IA] $modelo nivel=${nivel ?? 'por defecto'} envío=${kb}KB '
+          'tiempo=${reloj.elapsedMilliseconds}ms tokens: entrada=${uso['promptTokenCount']} '
+          'razonamiento=${uso['thoughtsTokenCount'] ?? 0} salida=${uso['candidatesTokenCount']}');
     }
 
     // Se juntan los textos de la respuesta, sin las partes de razonamiento.
