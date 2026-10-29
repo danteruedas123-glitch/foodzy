@@ -20,24 +20,62 @@ class FondoAlimentos extends StatefulWidget {
 class _FondoAlimentosState extends State<FondoAlimentos>
     with SingleTickerProviderStateMixin {
   final _segundos = ValueNotifier<double>(0);
+
+  /// Tiempo ya recorrido antes de la última pausa: al reanudar, la cascada
+  /// sigue donde iba en vez de volver al principio.
+  double _base = 0;
   late final Ticker _ticker = createTicker(
-    (t) => _segundos.value = t.inMicroseconds / Duration.microsecondsPerSecond,
+    (t) => _segundos.value =
+        _base + t.inMicroseconds / Duration.microsecondsPerSecond,
   );
+
+  bool _quieto = false;
+  bool _visible = true;
+  ScrollPosition? _posicion;
+
+  /// Se guarda entre reconstrucciones para no recalcular la rejilla de
+  /// siluetas cada vez que la pantalla de inicio se redibuja.
+  _PintorCascada? _pintor;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Respeta "reducir movimiento": el patrón se queda quieto.
-    final quieto = MediaQuery.disableAnimationsOf(context);
-    if (quieto && _ticker.isActive) {
-      _ticker.stop();
-    } else if (!quieto && !_ticker.isActive) {
+    _quieto = MediaQuery.disableAnimationsOf(context);
+
+    // Al desplazar la pantalla, se pausa mientras el encabezado no se ve.
+    final posicion = Scrollable.maybeOf(context)?.position;
+    if (posicion != _posicion) {
+      _posicion?.removeListener(_revisarVisible);
+      _posicion = posicion?..addListener(_revisarVisible);
+    }
+    _actualizarTicker();
+  }
+
+  void _revisarVisible() {
+    final caja = context.findRenderObject();
+    if (caja is! RenderBox || !caja.attached || !caja.hasSize) return;
+    final arriba = caja.localToGlobal(Offset.zero).dy;
+    final visible = arriba + caja.size.height > 0 &&
+        arriba < MediaQuery.sizeOf(context).height;
+    if (visible == _visible) return;
+    _visible = visible;
+    _actualizarTicker();
+  }
+
+  void _actualizarTicker() {
+    final animar = !_quieto && _visible;
+    if (animar && !_ticker.isActive) {
       _ticker.start();
+    } else if (!animar && _ticker.isActive) {
+      _base = _segundos.value;
+      _ticker.stop();
     }
   }
 
   @override
   void dispose() {
+    _posicion?.removeListener(_revisarVisible);
     _ticker.dispose();
     _segundos.dispose();
     super.dispose();
@@ -49,15 +87,14 @@ class _FondoAlimentosState extends State<FondoAlimentos>
     final relleno = theme.brightness == Brightness.dark
         ? const Color(0xFF0B0B0B)
         : theme.colorScheme.surfaceContainerHigh;
-    return RepaintBoundary(
-      child: CustomPaint(
-        painter: _PintorCascada(
-          _segundos,
-          premium: widget.premium,
-          relleno: relleno,
-        ),
-      ),
-    );
+    final anterior = _pintor;
+    final pintor = anterior != null &&
+            anterior.premium == widget.premium &&
+            anterior.relleno == relleno
+        ? anterior
+        : _PintorCascada(_segundos, premium: widget.premium, relleno: relleno);
+    _pintor = pintor;
+    return RepaintBoundary(child: CustomPaint(painter: pintor));
   }
 }
 
