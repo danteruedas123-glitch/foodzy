@@ -1,0 +1,70 @@
+# Compila Foodzy para iPhone en un Mac de GitHub (gratis en repositorios
+# públicos) y deja el archivo Foodzy.ipa sin firmar. Se instala en el iPhone
+# desde Windows con Sideloadly y un Apple ID normal: ver docs/iphone.md.
+name: App para iPhone
+
+on:
+  push:
+    branches: [main, mejoras-foodzy, soporte-iphone]
+    paths:
+      - 'lib/**'
+      - 'ios/**'
+      - 'assets/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/iphone.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: iphone-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ipa:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Dependencias
+        run: flutter pub get
+
+      - name: Compilar sin firmar (Sideloadly la firma con tu Apple ID)
+        # COMPRAS_PRUEBA: Premium de prueba, igual que en las compilaciones de desarrollo.
+        run: flutter build ios --release --no-codesign --dart-define=COMPRAS_PRUEBA=true
+
+      - name: Empaquetar Foodzy.ipa
+        run: |
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qry Foodzy.ipa Payload
+          ls -lh Foodzy.ipa
+
+      - name: Guardar como artefacto de esta ejecución
+        uses: actions/upload-artifact@v4
+        with:
+          name: Foodzy-iPhone
+          path: Foodzy.ipa
+          retention-days: 30
+
+      - name: Publicar con enlace fijo de descarga
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: iphone-ultima
+          name: Foodzy para iPhone (última versión)
+          prerelease: true
+          files: Foodzy.ipa
+          body: |
+            Última compilación de Foodzy para iPhone (rama `${{ github.ref_name }}`, commit ${{ github.sha }}).
+
+            Se instala desde Windows con Sideloadly y un Apple ID gratuito; los pasos están en `docs/iphone.md`.
+            Con un Apple ID gratuito la instalación dura 7 días: después se vuelve a instalar igual.
