@@ -232,9 +232,11 @@ class AlimentosNotifier extends AsyncNotifier<List<Alimento>> {
     // Lo que queda se calcula en memoria en vez de volver a leer todo.
     final antes = state.value ?? await repo.obtenerTodos();
     final restantes = antes.where((a) => !ids.contains(a.id)).toList();
+    // Fotos y tickets: una misma factura la comparten muchos alimentos.
+    Iterable<String> archivos(Alimento a) => [...a.fotos, ?a.ticket];
     await borrarFotosHuerfanas(
-      lista.expand((a) => a.fotos),
-      restantes.expand((a) => a.fotos).toSet(),
+      lista.expand(archivos),
+      restantes.expand(archivos).toSet(),
     );
     state = AsyncValue.data(restantes);
     return lista.length;

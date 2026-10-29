@@ -57,6 +57,8 @@ class Alimento {
     this.precio,
     this.fechaCompra,
     this.cantidadInicial,
+    this.emoji,
+    this.ticket,
   });
 
   factory Alimento.fromJson(Map<String, dynamic> json) => Alimento(
@@ -73,6 +75,8 @@ class Alimento {
         fechaCompra:
             DateTime.tryParse(leerTextoOpcional(json, 'fechaCompra') ?? ''),
         cantidadInicial: (json['cantidadInicial'] as num?)?.toDouble(),
+        emoji: leerTextoOpcional(json, 'emoji'),
+        ticket: leerTextoOpcional(json, 'ticket'),
       );
 
   final String id;
@@ -96,6 +100,14 @@ class Alimento {
   /// Cantidad con la que entró, para saber qué parte se desperdició.
   final double? cantidadInicial;
 
+  /// Emoji que eligió la IA para este producto concreto (🧀, 🍌...). Se usa
+  /// de miniatura cuando no hay foto del producto.
+  final String? emoji;
+
+  /// Foto de la factura de la que salió, si se registró escaneando una. Va
+  /// aparte de [fotos] porque no muestra el producto.
+  final String? ticket;
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'nombre': nombre,
@@ -109,6 +121,8 @@ class Alimento {
         if (precio != null) 'precio': precio,
         if (fechaCompra != null) 'fechaCompra': fechaCompra!.toIso8601String(),
         if (cantidadInicial != null) 'cantidadInicial': cantidadInicial,
+        if (emoji != null) 'emoji': emoji,
+        if (ticket != null) 'ticket': ticket,
       };
 
   // ── Reglas de negocio ───────────────────────────────────────────────────
@@ -170,7 +184,9 @@ class Alimento {
       _copiar(fechaVencimiento: fecha, origenFecha: origen);
 
   /// Copia con otro id y otras fotos (al guardar lo detectado por la IA).
-  Alimento conIdYFotos(String nuevoId, List<String> nuevasFotos) => Alimento(
+  /// Con [ticket] guarda también la foto de la factura de la que salió.
+  Alimento conIdYFotos(String nuevoId, List<String> nuevasFotos, {String? ticket}) =>
+      Alimento(
         id: nuevoId,
         nombre: nombre,
         categoria: categoria,
@@ -183,6 +199,8 @@ class Alimento {
         precio: precio,
         fechaCompra: fechaCompra,
         cantidadInicial: cantidadInicial,
+        emoji: emoji,
+        ticket: ticket ?? this.ticket,
       );
 
   /// Copia marcada como "no vence".
@@ -235,6 +253,8 @@ class Alimento {
         precio: precio ?? this.precio,
         fechaCompra: fechaCompra,
         cantidadInicial: cantidadInicial,
+        emoji: emoji,
+        ticket: ticket,
       );
 
   @override
@@ -252,6 +272,8 @@ class Alimento {
           other.precio == precio &&
           other.fechaCompra == fechaCompra &&
           other.cantidadInicial == cantidadInicial &&
+          other.emoji == emoji &&
+          other.ticket == ticket &&
           listasIguales(other.fotos, fotos);
 
   @override
@@ -268,6 +290,8 @@ class Alimento {
         precio,
         fechaCompra,
         cantidadInicial,
+        emoji,
+        ticket,
       );
 
   @override

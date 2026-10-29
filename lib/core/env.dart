@@ -20,6 +20,18 @@ class Env {
     'gemini-3.8-flash',
   ];
 
+  /// Para respuestas cortas donde importa más acertar que la velocidad (leer
+  /// una fecha impresa pequeña, estimar cuánto dura un producto): como la
+  /// respuesta es de pocas palabras, un Flash tarda casi lo mismo que un
+  /// Flash-Lite y lee mejor. gemini-3.6-flash primero: admite el
+  /// razonamiento mínimo.
+  static const List<String> geminiModelosPrecisos = [
+    'gemini-3.6-flash',
+    'gemini-3.8-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite',
+  ];
+
   /// Claves públicas de RevenueCat (Project settings → API keys):
   /// `--dart-define=REVENUECAT_ANDROID_KEY=goog_xxx`
   /// `--dart-define=REVENUECAT_IOS_KEY=appl_xxx`

@@ -18,7 +18,7 @@ class FotoAlimento extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final emoji = Center(
       child: Text(
-        emojiCategoria(alimento.categoria, alimento.nombre),
+        emojiDe(alimento),
         style: TextStyle(fontSize: tamano * 0.5),
       ),
     );

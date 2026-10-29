@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
+import 'package:foodzy/features/alimentos/domain/emoji_producto.dart';
 import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
 
 /// Cómo se muestra el estado de un alimento: texto corto, color e ícono.
@@ -72,8 +73,16 @@ EstadoVisual _estadoBase(Alimento a) {
   return EstadoVisual('Vence en $dias días', const Color(0xFF22C55E), Icons.eco_rounded);
 }
 
-/// Emoji según la categoría, para que la tarjeta se vea viva sin foto.
+/// Emoji de un alimento sin foto: el que eligió la IA para ese producto, o
+/// el que corresponde a su nombre, o el de su categoría.
+String emojiDe(Alimento a) =>
+    a.emoji ?? emojiCategoria(a.categoria, a.nombre);
+
+/// Emoji según el producto (si el nombre se reconoce) o su categoría, para
+/// que la tarjeta se vea viva sin foto.
 String emojiCategoria(String categoria, [String nombre = '']) {
+  final porNombre = emojiPorNombre(nombre);
+  if (porNombre != null) return porNombre;
   final t = '${categoria.toLowerCase()} ${nombre.toLowerCase()}';
   bool tiene(List<String> ps) => ps.any(t.contains);
   if (tiene(['lácteo', 'lacteo', 'leche', 'queso', 'yogur'])) return '🥛';

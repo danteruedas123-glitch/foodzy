@@ -20,9 +20,14 @@ final scannerServiceProvider = Provider<ScannerService>((ref) {
 
 /// Un alimento que la IA propone, antes de que el usuario lo confirme.
 class AlimentoDetectado {
-  const AlimentoDetectado({required this.alimento});
+  const AlimentoDetectado({required this.alimento, this.caja});
 
   final Alimento alimento;
+
+  /// Dónde está el producto en la foto: `[ymin, xmin, ymax, xmax]` en
+  /// milésimas (0 a 1000). Sirve para recortar su miniatura. `null` en las
+  /// facturas, o si la IA no lo indicó.
+  final List<num>? caja;
 
   /// `true` si la fecha de vencimiento no se leyó sino que se estimó.
   bool get fechaEstimada => alimento.origenFecha == FechaOrigen.estimada;
@@ -97,14 +102,41 @@ class GeminiScannerService implements ScannerService {
   final String apiKey;
   final GeminiClient _cliente;
 
+  /// Cómo leer una fecha impresa sin confundirla con otras del empaque.
+  static const _comoLeerFecha =
+      'Cómo leer la fecha impresa: puede decir VENCE, VENC, V., F.V., FV, EXP, CAD, CONSUMIR ANTES DE, '
+      'CONSUMIR PREFERENTEMENTE ANTES DE o BEST BEFORE, y suele estar en la tapa, el cuello de la botella, '
+      'el fondo, la pestaña o un borde del empaque. El formato es día/mes/año (25/12/26 = 25 de diciembre de 2026; '
+      '05-03-2027 = 5 de marzo de 2027); un año de 2 cifras es 20XX. Si solo hay mes y año (12/2026, DIC 2026), '
+      'usa el último día de ese mes. NO la confundas con la fecha de elaboración o fabricación (F.E., ELAB, FAB, '
+      'PROD, EMP), el lote (L., LOTE) ni el registro sanitario (INVIMA, RSA): si aparecen dos fechas, la de '
+      'vencimiento es la más lejana. Si no se lee con claridad, no la inventes.';
+
+  /// Cuánto dura cada tipo de producto sin abrir, para estimar la fecha.
+  static const _vidaUtil =
+      'Días que dura cada tipo de producto SIN ABRIR (nevera / congelador / alacena): '
+      'leche pasteurizada en bolsa 5 / 60 / -; leche UHT o larga vida 90 en alacena; yogur, kumis y bebidas lácteas 21 / - / -; '
+      'queso fresco, campesino o cuajada 7 / 60 / -; queso madurado o tajado 30 / 90 / -; mantequilla 60 / 180 / -; crema de leche 10; '
+      'huevos 30 / - / 21; carne de res o cerdo cruda 3 / 180 / -; carne molida 2 / 90 / -; pollo crudo 2 / 270 / -; '
+      'pescado y mariscos crudos 2 / 120 / -; jamón, salchichas y embutidos sellados 30 / 60 / -; '
+      'pan tajado o de molde 10 / 90 / 7; pan fresco de panadería 4 / 60 / 2; arepas empacadas 10 / 60 / -; tortillas 20; '
+      'banano y plátano - / - / 5; aguacate 6 / - / 4; fresas y moras 4; uvas 7; manzana y pera 30 / - / 10; '
+      'naranja, limón y mandarina 21 / - / 10; papaya, piña y mango 5 / - / 4; lechuga, espinaca y hierbas 5; '
+      'tomate 10 / - / 6; zanahoria 21; pimentón, pepino y brócoli 7; papa - / - / 30; cebolla cabezona - / - / 45; ajo 90; '
+      'arroz, pasta seca, granos secos, harina y azúcar 365 en alacena; enlatados 730; galletas, cereales y snacks 180; '
+      'café molido 180; aceite 365; salsas (tomate, mayonesa) 270; jugos en caja 180; gaseosas 180; '
+      'congelados industriales (verduras, helado, nuggets) 240 en congelador. '
+      'Para lo que no esté en la tabla, usa el producto más parecido.';
+
   static const _reglasFecha =
       'Fecha de vencimiento, en este orden: '
       '(a) Si el producto NO se echa a perder (sal, azúcar, miel, vinagre, especias secas, bicarbonato, agua embotellada...), '
       'pon "no_vence": true y "fecha_vencimiento_iso": null. '
       '(b) Si la fecha impresa en el empaque se ve con claridad, léela y pon "fecha_origen": "leida". '
-      '(c) En cualquier otro caso ESTIMA la fecha desde hoy según el tipo de producto y cuánto dura normalmente '
-      '(frescos pocos días; lácteos y embutidos semanas; pan 5 a 7 días; congelados meses; enlatados y secos 1 a 2 años; '
-      'leche UHT sellada 3 a 6 meses) y pon "fecha_origen": "estimada". '
+      '$_comoLeerFecha '
+      '(c) En cualquier otro caso ESTÍMALA sumando a hoy los días de esta tabla para la ubicación que sugieras, '
+      'y pon "fecha_origen": "estimada". $_vidaUtil '
+      'Si en la foto se ve maduro, abierto o en mal estado, acorta la fecha. '
       'Sé conservador: ante la duda, estima una fecha más corta. '
       'Nunca dejes la fecha en null salvo que "no_vence" sea true. '
       'Ubicación: sugiere dónde se guarda cada producto en "ubicacion" ("nevera", "congelador" o "alacena") y estima la fecha ASUMIENDO esa ubicación '
@@ -118,6 +150,10 @@ class GeminiScannerService implements ScannerService {
       'y cantidad_unidad es g, ml, kg o L según el empaque (ej. un Milo de 300 g → 300 "g"; 2 leches de 1 L → 2 "L"). '
       'Usa "u" para un empaque solo si no se alcanza a ver su contenido.';
 
+  static const _reglaEmoji =
+      '"emoji" es UN solo emoji que muestre ese producto concreto, no su categoría '
+      '(🥛 leche, 🧀 queso, 🥚 huevos, 🍌 banano, 🍅 tomate, 🍗 pollo, 🥩 carne, 🍚 arroz, 🍝 pasta, 🍞 pan, 🥫 enlatados).';
+
   @override
   Future<List<AlimentoDetectado>> analizarCompra(XFile imagen) async {
     final hoy = _hoy();
@@ -126,12 +162,14 @@ Analiza esta foto de comida o mercado. Identifica cada alimento por separado.
 Hoy es $hoy.
 
 Devuelve SOLO un arreglo JSON con objetos de esta forma:
-{"nombre": "Tomate", "categoria": "Verduras", "cantidad_valor": 3, "cantidad_unidad": "u", "fecha_vencimiento_iso": "YYYY-MM-DD" o null, "fecha_origen": "leida" o "estimada", "no_vence": false, "ubicacion": "nevera"}
+{"nombre": "Tomate", "categoria": "Verduras", "emoji": "🍅", "cantidad_valor": 3, "cantidad_unidad": "u", "fecha_vencimiento_iso": "YYYY-MM-DD" o null, "fecha_origen": "leida" o "estimada", "no_vence": false, "ubicacion": "nevera", "box_2d": [ymin, xmin, ymax, xmax]}
 
 Reglas:
 1. $_reglasUnidad
 2. $_reglasFecha
-3. Si no hay comida en la imagen, devuelve [].
+3. $_reglaEmoji
+4. "box_2d" es el recuadro del producto en la foto, en milésimas de la imagen (0 a 1000). Si hay varias unidades juntas del mismo producto (3 tomates), un solo recuadro que las abarque.
+5. Si no hay comida en la imagen, devuelve [].
 ''', imagen);
     return _sinRepetidos(lista).map(_aDetectado).toList();
   }
@@ -144,14 +182,15 @@ Esta imagen es una factura o ticket de supermercado. Extrae SOLO los productos c
 Hoy es $hoy.
 
 Devuelve SOLO un arreglo JSON con objetos de esta forma:
-{"nombre": "Leche entera", "categoria": "Lácteos", "cantidad_valor": 2, "cantidad_unidad": "u", "fecha_vencimiento_iso": "YYYY-MM-DD", "fecha_origen": "estimada", "no_vence": false, "ubicacion": "nevera", "precio_total": 8500}
+{"nombre": "Leche entera", "categoria": "Lácteos", "emoji": "🥛", "cantidad_valor": 2, "cantidad_unidad": "u", "fecha_vencimiento_iso": "YYYY-MM-DD", "fecha_origen": "estimada", "no_vence": false, "ubicacion": "nevera", "precio_total": 8500}
 
 Reglas:
 1. Expande abreviaturas del ticket a un nombre legible (ej. "LCHE ENT 1L" → "Leche entera 1 L").
 2. Pon en "precio_total" lo que costó ese renglón (el total de la línea, número sin símbolo ni separador de miles; null si no se lee). Toma la cantidad comprada de la factura y el tamaño del empaque que suele venir en el nombre (ej. "MILO 300G" → 300 "g"). $_reglasUnidad
 3. Las facturas no traen fecha de vencimiento. $_reglasFecha
-4. Lista cada renglón de la factura UNA sola vez. Si un producto aparece en varios renglones o con cantidad mayor a 1, devuélvelo en un solo objeto con la cantidad sumada. Nunca repitas objetos idénticos.
-5. Si no hay productos legibles, devuelve [].
+4. $_reglaEmoji
+5. Lista cada renglón de la factura UNA sola vez. Si un producto aparece en varios renglones o con cantidad mayor a 1, devuélvelo en un solo objeto con la cantidad sumada. Nunca repitas objetos idénticos.
+6. Si no hay productos legibles, devuelve [].
 ''', imagen);
     return _sinRepetidos(lista).map(_aDetectado).toList();
   }
@@ -276,15 +315,14 @@ Devuelve SOLO un objeto JSON: {"fraccion_consumida": 0.25}
   @override
   Future<DateTime> leerFechaVencimiento(XFile imagen) async {
     final decodificado = await _cliente.pedir('''
-Esta es una foto de cerca de un empaque de alimento. Busca la fecha de vencimiento: puede decir
-VENCE, VENCIMIENTO, EXP, EXPIRA, BEST BEFORE, USAR ANTES DE, CONSUMIR PREFERENTEMENTE, F.V. o similar.
-Si aparecen varias fechas (producción/elaboración y vencimiento), devuelve SOLO la de vencimiento.
-Interpreta formatos como 25/12/2026, 25 DIC 26, 12-2026 o 2026-12-25. Si solo hay mes y año, usa el último día de ese mes.
+Esta es una foto de cerca de un empaque de alimento. Busca la fecha de vencimiento y devuelve SOLO esa.
+$_comoLeerFecha
+También puede venir como 25 DIC 26, 2026-12-25 o con puntos (25.12.26).
 Hoy es ${_hoy()}.
 
 Devuelve SOLO un objeto JSON: {"fecha_vencimiento_iso": "YYYY-MM-DD"}
 Si no se ve ninguna fecha de vencimiento con claridad, devuelve {"fecha_vencimiento_iso": null}.
-''', imagenes: [imagen]);
+''', imagenes: [imagen], preciso: true);
 
     final mapa = decodificado is List && decodificado.isNotEmpty
         ? decodificado.first
@@ -309,18 +347,19 @@ Si no se ve ninguna fecha de vencimiento con claridad, devuelve {"fecha_vencimie
     final json = await _cliente.pedir('''
 Producto: $nombre (categoría: $categoria). Se guarda en: $donde. Hoy es ${_hoy()}.
 
-Estima hasta cuándo se puede consumir de forma segura un producto SIN ABRIR de ese tipo guardado así.
+Estima hasta cuándo se puede consumir de forma segura un producto SIN ABRIR de ese tipo guardado así,
+sumando a hoy los días de esta tabla. $_vidaUtil
 Si no se echa a perder (sal, azúcar, miel, vinagre, especias secas...), responde no_vence true.
 Sé conservador: ante la duda, una fecha más corta.
 
 Devuelve SOLO un objeto JSON: {"fecha_vencimiento_iso": "YYYY-MM-DD" o null, "no_vence": false}
-''');
+''', preciso: true);
     final mapa = json is List && json.isNotEmpty ? json.first : json;
     if (mapa is! Map) throw const ScannerException('No pude estimar la fecha.');
     if (mapa['no_vence'] == true) return const FechaEstimada(noVence: true);
     final fecha = DateTime.tryParse(mapa['fecha_vencimiento_iso']?.toString() ?? '');
     if (fecha == null) throw const ScannerException('No pude estimar la fecha.');
-    return FechaEstimada(fecha: fecha);
+    return FechaEstimada(fecha: _noAntesDeHoy(fecha));
   }
 
   AlimentoDetectado _aDetectado(Map<String, dynamic> m) {
@@ -329,13 +368,21 @@ Devuelve SOLO un objeto JSON: {"fecha_vencimiento_iso": "YYYY-MM-DD" o null, "no
 
     final noVence = m['no_vence'] == true;
     final fechaIa = DateTime.tryParse(m['fecha_vencimiento_iso']?.toString() ?? '');
-    final DateTime fecha =
-        noVence ? Alimento.nuncaVence : (fechaIa ?? Alimento.sinFecha);
     final origen = (m['fecha_origen']?.toString() == 'leida')
         ? FechaOrigen.leida
         : FechaOrigen.estimada;
+    // Una fecha leída se respeta aunque ya pasó (el producto está vencido);
+    // una estimada en el pasado es un error de cálculo de la IA.
+    final DateTime fecha = noVence
+        ? Alimento.nuncaVence
+        : fechaIa == null
+            ? Alimento.sinFecha
+            : origen == FechaOrigen.estimada
+                ? _noAntesDeHoy(fechaIa)
+                : fechaIa;
 
     return AlimentoDetectado(
+      caja: _caja(m['box_2d']),
       alimento: Alimento(
         id: '${ahora.microsecondsSinceEpoch}-${m.hashCode}',
         nombre: m['nombre']?.toString() ?? 'Desconocido',
@@ -351,7 +398,28 @@ Devuelve SOLO un objeto JSON: {"fecha_vencimiento_iso": "YYYY-MM-DD" o null, "no
         precio: (m['precio_total'] as num?)?.toDouble(),
         fechaCompra: ahora,
         cantidadInicial: valor > 0 ? valor : 1.0,
+        emoji: _emoji(m['emoji']),
       ),
     );
+  }
+
+  /// Hoy si [fecha] ya pasó; si no, la misma fecha.
+  static DateTime _noAntesDeHoy(DateTime fecha) {
+    final a = DateTime.now();
+    final hoy = DateTime(a.year, a.month, a.day);
+    return fecha.isBefore(hoy) ? hoy : fecha;
+  }
+
+  /// El emoji solo si de verdad es un emoji corto (sin letras ni números).
+  static String? _emoji(Object? valor) {
+    final t = valor?.toString().trim() ?? '';
+    if (t.isEmpty || t.length > 12 || RegExp(r'[A-Za-z0-9]').hasMatch(t)) return null;
+    return t;
+  }
+
+  /// La caja `[ymin, xmin, ymax, xmax]` si tiene la forma esperada.
+  static List<num>? _caja(Object? valor) {
+    if (valor is! List || valor.length != 4 || valor.any((v) => v is! num)) return null;
+    return valor.cast<num>();
   }
 }

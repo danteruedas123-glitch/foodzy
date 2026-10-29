@@ -55,7 +55,9 @@ class GeminiClient {
   // la app esté abierta y no cambie la clave), para no repetir en cada
   // escaneo intentos que ya se sabe que fallan.
   static String? _claveRecordada;
-  static String? _ultimoQueRespondio;
+
+  /// El último modelo que respondió, por modo (rápido o preciso).
+  static final _ultimoQueRespondio = <bool, String>{};
   static final _noExisten = <String>{};
 
   /// Niveles de razonamiento, del más rápido al más lento. No todos los
@@ -67,23 +69,30 @@ class GeminiClient {
   static final _nivelPorModelo = <String, int>{};
 
   /// Modelos en el orden en que se prueban: primero el último que respondió.
-  List<String> _modelosEnOrden() {
+  List<String> _modelosEnOrden(bool preciso) {
     final clave = apiKey.trim();
     if (_claveRecordada != clave) {
       _claveRecordada = clave;
-      _ultimoQueRespondio = null;
+      _ultimoQueRespondio.clear();
       _noExisten.clear();
       _nivelPorModelo.clear();
     }
-    final ultimo = _ultimoQueRespondio;
+    final ultimo = _ultimoQueRespondio[preciso];
     return [
       ?ultimo,
-      for (final m in Env.geminiModelos)
+      for (final m in preciso ? Env.geminiModelosPrecisos : Env.geminiModelos)
         if (m != ultimo && !_noExisten.contains(m)) m,
     ];
   }
 
-  Future<dynamic> pedir(String prompt, {List<XFile> imagenes = const []}) async {
+  /// Con [preciso] se prueban primero los modelos que leen mejor
+  /// ([Env.geminiModelosPrecisos]); conviene para respuestas cortas. Sin él,
+  /// primero los más rápidos, para respuestas largas como una factura.
+  Future<dynamic> pedir(
+    String prompt, {
+    List<XFile> imagenes = const [],
+    bool preciso = false,
+  }) async {
     if (apiKey.trim().isEmpty) {
       throw const ScannerException(
         'Falta la API Key de Gemini. Pégala en Ajustes → Inteligencia artificial.',
@@ -113,12 +122,12 @@ class GeminiClient {
     final descartados = <String>{};
     for (var vuelta = 0; vuelta < 2 && texto == null; vuelta++) {
       var huboSaturacion = false;
-      for (final nombre in _modelosEnOrden()) {
+      for (final nombre in _modelosEnOrden(preciso)) {
         if (descartados.contains(nombre)) continue;
         final intento = Stopwatch()..start();
         try {
           texto = await _generar(nombre, partes);
-          _ultimoQueRespondio = nombre;
+          _ultimoQueRespondio[preciso] = nombre;
           break;
         } on _ErrorGemini catch (e) {
           debugPrint('[IA] $nombre falló tras ${intento.elapsedMilliseconds}ms: $e');
