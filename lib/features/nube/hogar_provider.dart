@@ -21,10 +21,13 @@ class HogarNotifier extends AsyncNotifier<Hogar?> {
 
   @override
   Future<Hogar?> build() async {
-    final auth = ref.watch(authProvider);
-    if (!Nube.disponible || !auth.esNube) return null;
+    // Solo depende de qué cuenta es: cambiar el nombre o la foto, o que
+    // Firebase renueve la sesión, no vuelve a consultar el hogar.
+    final uid = ref.watch(authProvider.select((a) => a.uid));
+    if (!Nube.disponible || uid == null) return null;
+    final auth = ref.read(authProvider);
     return _servicio
-        .asegurar(uid: auth.uid!, nombre: auth.userName, email: auth.email)
+        .asegurar(uid: uid, nombre: auth.userName, email: auth.email)
         .timeout(const Duration(seconds: 15));
   }
 
@@ -49,6 +52,13 @@ class HogarNotifier extends AsyncNotifier<Hogar?> {
   static Future<void> _copiarDespensa(String desdeHogarId, String haciaHogarId) async {
     final viejos = await FirestoreAlimentosRepository(desdeHogarId).obtenerTodos();
     await FirestoreAlimentosRepository(haciaHogarId).guardarVarios(viejos);
+  }
+
+  /// Cambia el código de invitación (solo el dueño). El anterior deja de servir.
+  Future<void> cambiarCodigo() async {
+    final actual = state.value;
+    if (actual == null) return;
+    state = AsyncData(await _servicio.cambiarCodigo(actual));
   }
 
   /// Sale del hogar compartido y vuelve a tener uno propio, vacío.

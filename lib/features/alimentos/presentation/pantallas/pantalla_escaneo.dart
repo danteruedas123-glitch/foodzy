@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foodzy/core/cargando_alimentos.dart';
 import 'package:foodzy/core/formato.dart';
+import 'package:foodzy/core/recortes.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
 import 'package:foodzy/features/alimentos/domain/scanner_service.dart';
 import 'package:foodzy/features/alimentos/presentation/providers/alimentos_provider.dart';
@@ -56,9 +57,10 @@ class _PantallaEscaneoState extends ConsumerState<PantallaEscaneo> {
     });
     try {
       final scanner = ref.read(scannerServiceProvider);
-      final r = widget.modo == ModoEscaneo.factura
+      var r = widget.modo == ModoEscaneo.factura
           ? await scanner.analizarFactura(widget.imageFile)
           : await scanner.analizarCompra(widget.imageFile);
+      if (widget.modo == ModoEscaneo.compra) r = await _conMiniaturas(r);
       if (!mounted) return;
       setState(() {
         _items = r;
@@ -71,6 +73,25 @@ class _PantallaEscaneoState extends ConsumerState<PantallaEscaneo> {
         _procesando = false;
       });
     }
+  }
+
+  /// En una foto de compra, cada producto recibe una miniatura recortada de
+  /// la foto (donde la IA dijo que estaba), así se reconoce de un vistazo
+  /// en vez de mostrar la foto completa en todos.
+  Future<List<AlimentoDetectado>> _conMiniaturas(List<AlimentoDetectado> items) async {
+    final recortes = await recortarProductos(
+      widget.imageFile.path,
+      [for (final d in items) d.caja],
+    );
+    return [
+      for (var i = 0; i < items.length; i++)
+        recortes[i] == null
+            ? items[i]
+            : AlimentoDetectado(
+                alimento: items[i].alimento.copyWith(fotos: [recortes[i]!]),
+                caja: items[i].caja,
+              ),
+    ];
   }
 
   bool get _todosListos =>
@@ -119,11 +140,18 @@ class _PantallaEscaneoState extends ConsumerState<PantallaEscaneo> {
     var n = 0;
     final base = DateTime.now().microsecondsSinceEpoch;
     try {
-      for (final d in _items!) {
-        await notifier.agregar(
-          d.alimento.conIdYFotos('$base-${n++}', [widget.imageFile.path]),
-        );
-      }
+      // Todos de una vez: una sola escritura y un solo cambio en pantalla.
+      // La factura no muestra el producto: va como ticket y la miniatura es
+      // el emoji. De una foto de compra, primero el recorte del producto y
+      // luego la foto completa.
+      final factura = widget.modo == ModoEscaneo.factura;
+      final foto = widget.imageFile.path;
+      await notifier.guardarVarios([
+        for (final d in _items!)
+          factura
+              ? d.alimento.conIdYFotos('$base-${n++}', const [], ticket: foto)
+              : d.alimento.conIdYFotos('$base-${n++}', [...d.alimento.fotos, foto]),
+      ]);
       // Marcar la lista de compras es secundario: no debe dejar la pantalla esperando.
       await ref
           .read(listaCompraProvider.notifier)

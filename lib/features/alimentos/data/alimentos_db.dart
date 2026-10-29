@@ -96,6 +96,34 @@ class AlimentosDB implements AlimentosRepository {
     );
   }
 
+  /// Guarda varios alimentos en una sola transacción.
+  Future<void> guardarVarios(Iterable<Alimento> alimentos) async {
+    final db = await instance.database;
+    final lote = db.batch();
+    for (final a in alimentos) {
+      lote.insert(
+        'alimentos',
+        {'id': a.id, 'datos': jsonEncode(a.toJson())},
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+    await lote.commit(noResult: true);
+  }
+
+  /// Borra varios alimentos con una sola consulta por cada 500 ids.
+  Future<void> eliminarVarios(Iterable<String> ids) async {
+    final db = await instance.database;
+    final lista = ids.toList();
+    for (var i = 0; i < lista.length; i += 500) {
+      final parte = lista.skip(i).take(500).toList();
+      await db.delete(
+        'alimentos',
+        where: 'id IN (${List.filled(parte.length, '?').join(',')})',
+        whereArgs: parte,
+      );
+    }
+  }
+
   @override
   Future<void> eliminar(String id) async {
     final db = await instance.database;

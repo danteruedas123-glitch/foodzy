@@ -6,6 +6,7 @@ class RepoFalso implements HogarRepository {
   final hogares = <String, Set<String>>{}; // id -> miembros
   final codigos = <String, String>{}; // código -> id del hogar
   final usuarios = <String, String>{}; // uid -> id de su hogar actual
+  final duenos = <String, String>{}; // id del hogar -> uid de quien lo creó
   var _n = 0;
 
   /// `asignar` lanza error.
@@ -22,7 +23,12 @@ class RepoFalso implements HogarRepository {
     final id = usuarios[uid];
     final miembros = id == null ? null : hogares[id];
     if (id == null || miembros == null || !miembros.contains(uid)) return null;
-    return Hogar(id: id, codigo: _codigoDe(id), miembros: miembros.length);
+    return Hogar(
+      id: id,
+      codigo: _codigoDe(id),
+      miembros: miembros.length,
+      esDueno: duenos[id] == uid,
+    );
   }
 
   String _codigoDe(String id) => codigos.entries.firstWhere((e) => e.value == id).key;
@@ -34,16 +40,29 @@ class RepoFalso implements HogarRepository {
     hogares[id] = {uid};
     codigos[codigo] = id;
     usuarios[uid] = id;
-    return Hogar(id: id, codigo: codigo, miembros: 1);
+    duenos[id] = uid;
+    return Hogar(id: id, codigo: codigo, miembros: 1, esDueno: true);
   }
 
   @override
   Future<String?> hogarIdPorCodigo(String codigo) async => codigos[codigo];
 
+  /// Códigos con los que se intentó entrar, en orden.
+  final codigosUsados = <String>[];
+
   @override
-  Future<void> agregarMiembro(String hogarId, String uid) async {
+  Future<void> agregarMiembro(String hogarId, String uid, {required String codigo}) async {
+    codigosUsados.add(codigo);
     if (fallaAgregar) throw Exception('permission-denied');
     hogares[hogarId]!.add(uid);
+  }
+
+  @override
+  Future<String> cambiarCodigo(String hogarId, String codigoActual) async {
+    final nuevo = 'NUEVO${++_n}';
+    codigos.remove(codigoActual);
+    codigos[nuevo] = hogarId;
+    return nuevo;
   }
 
   @override
@@ -228,6 +247,46 @@ void main() {
       final propio = await servicio.salir(uid: 'luis', actual: compartido);
 
       expect(repo.usuarios['luis'], propio.id);
+    });
+  });
+
+  group('código de invitación', () {
+    late Hogar ana;
+    late Hogar luis;
+
+    setUp(() async {
+      ana = await servicio.asegurar(uid: 'ana');
+      luis = await servicio.asegurar(uid: 'luis');
+    });
+
+    test('al unirse se envía el código (normalizado) que piden las reglas', () async {
+      await servicio.unirse(uid: 'luis', actual: luis, codigo: ' ${ana.codigo.toLowerCase()}');
+
+      expect(repo.codigosUsados, [ana.codigo]);
+    });
+
+    test('el dueño lo cambia: el viejo deja de servir y el nuevo sí sirve', () async {
+      final cambiado = await servicio.cambiarCodigo(ana);
+
+      expect(cambiado.codigo, isNot(ana.codigo));
+      await expectLater(
+        servicio.unirse(uid: 'luis', actual: luis, codigo: ana.codigo),
+        throwsA(isA<HogarError>()),
+      );
+      await servicio.unirse(uid: 'luis', actual: luis, codigo: cambiado.codigo);
+      expect(repo.usuarios['luis'], ana.id);
+    });
+
+    test('quien no es dueño no lo puede cambiar', () async {
+      await servicio.unirse(uid: 'luis', actual: luis, codigo: ana.codigo);
+      final deLuis = (await repo.hogarDe('luis'))!;
+
+      expect(deLuis.esDueno, isFalse);
+      await expectLater(
+        servicio.cambiarCodigo(deLuis),
+        throwsA(isA<HogarError>().having(
+            (e) => e.mensaje, 'mensaje', contains('Solo quien creó el hogar'))),
+      );
     });
   });
 }

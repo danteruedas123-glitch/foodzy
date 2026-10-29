@@ -11,22 +11,27 @@ DateTime? fechaDeCierre(Alimento a) => switch (a.estado) {
       Disponible() => null,
     };
 
+/// Letra con tilde → letra sin tilde, armado una sola vez.
+final Map<int, int> _sinTilde = () {
+  const de = 'áàäâéèëêíìïîóòöôúùüûñ';
+  const a = 'aaaaeeeeiiiioooouuuun';
+  return {for (var i = 0; i < de.length; i++) de.codeUnitAt(i): a.codeUnitAt(i)};
+}();
+
+final _espacios = RegExp(r'\s+');
+
+/// Claves ya calculadas. Se piden muchas veces con los mismos nombres (en
+/// cada tecla del buscador, por cada alimento), así que se recuerdan.
+final _claves = <String, String>{};
+
 /// Clave para reconocer "el mismo producto" aunque cambien mayúsculas,
 /// tildes o espacios ("Leche  Deslactosada" == "leche deslactosada").
 String claveNombre(String nombre) {
-  const de = 'áàäâéèëêíìïîóòöôúùüûñ';
-  const a = 'aaaaeeeeiiiiooooUuuun';
-  var t = nombre.trim().toLowerCase();
-  final b = StringBuffer();
-  for (final c in t.split('')) {
-    final i = de.indexOf(c);
-    if (i >= 0) {
-      final r = a[i];
-      b.write(r == 'U' ? 'u' : r);
-    } else {
-      b.write(c);
-    }
-  }
-  t = b.toString().replaceAll(RegExp(r'\s+'), ' ');
-  return t;
+  final guardada = _claves[nombre];
+  if (guardada != null) return guardada;
+  if (_claves.length >= 2000) _claves.clear();
+  final t = String.fromCharCodes(
+    nombre.trim().toLowerCase().codeUnits.map((c) => _sinTilde[c] ?? c),
+  ).replaceAll(_espacios, ' ');
+  return _claves[nombre] = t;
 }

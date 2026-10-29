@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -35,8 +37,17 @@ class NotificacionesService {
     iOS: DarwinNotificationDetails(),
   );
 
-  Future<void> iniciar() async {
-    if (!soportado || _listo) return;
+  Future<void>? _iniciando;
+
+  /// Prepara el plugin una sola vez. Si se llama varias veces a la vez (el
+  /// arranque, el permiso y la primera reprogramación), todas esperan la misma
+  /// preparación en vez de repetirla.
+  Future<void> iniciar() {
+    if (!soportado || _listo) return Future.value();
+    return _iniciando ??= _iniciar().whenComplete(() => _iniciando = null);
+  }
+
+  Future<void> _iniciar() async {
     try {
       tz.initializeTimeZones();
       try {
@@ -94,23 +105,56 @@ class NotificacionesService {
     }
   }
 
+  Future<void> _cola = Future.value();
+  int? _ultimaFirma;
+
   /// Reprograma todos los avisos según la despensa y los ajustes actuales.
+  /// Las llamadas se hacen una tras otra: dos a la vez se pisaban (una podía
+  /// cancelar lo que la otra acababa de programar).
   Future<void> reprogramar(
+    List<Alimento> alimentos,
+    AjustesNotificaciones ajustes,
+  ) =>
+      _cola = _cola.then((_) => _reprogramar(alimentos, ajustes));
+
+  Future<void> _reprogramar(
     List<Alimento> alimentos,
     AjustesNotificaciones ajustes,
   ) async {
     if (!soportado) return;
     await iniciar();
     if (!_listo) return;
+
+    // Si no cambió nada que afecte a los avisos (por ejemplo, solo cambió la
+    // cantidad de un alimento), no se cancelan y reprograman todos otra vez.
+    final hoy = DateTime.now();
+    final firma = Object.hashAll([
+      ajustes.activas,
+      ajustes.diasAviso,
+      ajustes.hora,
+      ajustes.minuto,
+      hoy.year,
+      hoy.month,
+      hoy.day,
+      for (final a in alimentos)
+        if (a.estado is Disponible && !a.sinFechaVencimiento && !a.noVence)
+          Object.hash(a.id, a.nombre, a.fechaVencimiento, a.origenFecha),
+    ]);
+    if (firma == _ultimaFirma) return;
+
     try {
       await _plugin.cancelAllPendingNotifications();
-      if (!ajustes.activas) return;
+      _ultimaFirma = null;
+      if (!ajustes.activas) {
+        _ultimaFirma = firma;
+        return;
+      }
 
       final ahora = tz.TZDateTime.now(tz.local);
       for (final a in alimentos) {
         if (a.estado is! Disponible || a.sinFechaVencimiento || a.noVence) continue;
 
-        final f = a.fechaVencimiento;
+        final f = a.fechaVencimiento.toLocal(); // se guarda en UTC
         final finDelDia = tz.TZDateTime(tz.local, f.year, f.month, f.day, 23, 59);
         if (finDelDia.isBefore(ahora)) continue; // ya venció
 
@@ -149,6 +193,7 @@ class NotificacionesService {
           payload: a.id,
         );
       }
+      _ultimaFirma = firma;
     } catch (e) {
       debugPrint('No se pudieron programar los avisos: $e');
     }

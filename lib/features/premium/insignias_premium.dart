@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foodzy/features/auth/presentation/providers/auth_provider.dart';
@@ -193,23 +195,41 @@ class InsigniaPremium extends StatefulWidget {
 
 class _InsigniaPremiumState extends State<InsigniaPremium>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _brillo = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 3600),
-  );
+  // Ciclo de 3,6 s: el destello cruza durante 1,26 s (el 35%) y luego la
+  // etiqueta descansa. El controlador solo corre mientras cruza el destello;
+  // en el descanso un temporizador espera, así no se redibuja la etiqueta
+  // 60 veces por segundo para mostrar siempre lo mismo.
+  static const _cruce = Duration(milliseconds: 1260);
+  static const _descanso = Duration(milliseconds: 2340);
+
+  late final AnimationController _brillo =
+      AnimationController(vsync: this, duration: _cruce)
+        ..addStatusListener((estado) {
+          if (estado == AnimationStatus.completed && !_quieto) {
+            _espera?.cancel();
+            _espera = Timer(_descanso, () {
+              if (mounted && !_quieto) _brillo.forward(from: 0);
+            });
+          }
+        });
+  Timer? _espera;
+  bool _quieto = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (MediaQuery.disableAnimationsOf(context)) {
+    _quieto = MediaQuery.disableAnimationsOf(context);
+    if (_quieto) {
+      _espera?.cancel();
       _brillo.stop();
-    } else if (!_brillo.isAnimating) {
-      _brillo.repeat();
+    } else if (!_brillo.isAnimating && !(_espera?.isActive ?? false)) {
+      _brillo.forward(from: 0);
     }
   }
 
   @override
   void dispose() {
+    _espera?.cancel();
     _brillo.dispose();
     super.dispose();
   }
@@ -218,64 +238,72 @@ class _InsigniaPremiumState extends State<InsigniaPremium>
   Widget build(BuildContext context) {
     final fuente = widget.compacta ? 9.0 : 11.0;
     final radio = BorderRadius.circular(999);
-    return AnimatedBuilder(
-      animation: _brillo,
-      builder: (context, child) {
-        // El destello cruza en el primer 35% del ciclo y luego descansa.
-        final t = (_brillo.value / 0.35).clamp(0.0, 1.0);
-        return Container(
-          decoration: BoxDecoration(
-            gradient: OroPremium.degradado,
-            borderRadius: radio,
-            border: Border.all(color: OroPremium.claro.withValues(alpha: 0.8)),
-            boxShadow: [
-              BoxShadow(
-                color: OroPremium.profundo.withValues(alpha: 0.35),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
+    // Capa propia: el destello no obliga a redibujar lo que la rodea.
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _brillo,
+        builder: (context, child) {
+          final t = _brillo.value;
+          return Container(
+            decoration: BoxDecoration(
+              gradient: OroPremium.degradado,
+              borderRadius: radio,
+              border: Border.all(
+                color: OroPremium.claro.withValues(alpha: 0.8),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: OroPremium.profundo.withValues(alpha: 0.35),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            foregroundDecoration: _brillo.isAnimating && t < 1
+                ? BoxDecoration(
+                    borderRadius: radio,
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        Colors.white.withValues(alpha: 0),
+                        Colors.white.withValues(alpha: 0.65),
+                        Colors.white.withValues(alpha: 0),
+                      ],
+                      stops: const [0.35, 0.5, 0.65],
+                      transform: _Deslizar(t * 2 - 1),
+                    ),
+                  )
+                : null,
+            child: child,
+          );
+        },
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: widget.compacta ? 7 : 9,
+            vertical: widget.compacta ? 2 : 3,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.star_rounded,
+                size: fuente + 3,
+                color: OroPremium.tinta,
+              ),
+              const SizedBox(width: 3),
+              Text(
+                'PREMIUM',
+                style: TextStyle(
+                  fontSize: fuente,
+                  height: 1.2,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.4,
+                  color: OroPremium.tinta,
+                ),
               ),
             ],
           ),
-          foregroundDecoration: _brillo.isAnimating && t < 1
-              ? BoxDecoration(
-                  borderRadius: radio,
-                  gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [
-                      Colors.white.withValues(alpha: 0),
-                      Colors.white.withValues(alpha: 0.65),
-                      Colors.white.withValues(alpha: 0),
-                    ],
-                    stops: const [0.35, 0.5, 0.65],
-                    transform: _Deslizar(t * 2 - 1),
-                  ),
-                )
-              : null,
-          child: child,
-        );
-      },
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: widget.compacta ? 7 : 9,
-          vertical: widget.compacta ? 2 : 3,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.star_rounded, size: fuente + 3, color: OroPremium.tinta),
-            const SizedBox(width: 3),
-            Text(
-              'PREMIUM',
-              style: TextStyle(
-                fontSize: fuente,
-                height: 1.2,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.4,
-                color: OroPremium.tinta,
-              ),
-            ),
-          ],
         ),
       ),
     );

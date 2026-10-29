@@ -16,11 +16,53 @@ class PantallaDetalle extends ConsumerWidget {
 
   final Alimento alimento;
 
-  Widget _buildImageHeader() {
+  /// La foto de la factura de la que salió el alimento, a pantalla completa
+  /// y con zoom para leer el renglón.
+  void _verFactura(BuildContext context, String ruta) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: Stack(
+          children: [
+            InteractiveViewer(
+              maxScale: 5,
+              child: Center(
+                child: Image.file(
+                  File(ruta),
+                  errorBuilder: (_, _, _) => const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text(
+                      'La foto de la factura ya no está en este teléfono.',
+                      style: TextStyle(color: Colors.white),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SafeArea(
+              child: IconButton(
+                onPressed: () => Navigator.pop(ctx),
+                icon: const Icon(Icons.close_rounded, color: Colors.white),
+                tooltip: 'Cerrar',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageHeader(BuildContext context) {
     if (alimento.fotos.isEmpty) return const SizedBox.shrink();
 
     final path = alimento.fotos.first;
     final isNetwork = path.startsWith('http') || path.startsWith('blob:');
+    // Se decodifica al ancho de la pantalla, no al tamaño completo de la foto.
+    final ancho = (MediaQuery.sizeOf(context).width *
+            MediaQuery.devicePixelRatioOf(context))
+        .round();
 
     return Container(
       width: double.infinity,
@@ -42,6 +84,7 @@ class PantallaDetalle extends ConsumerWidget {
             ? Image.network(
                 path,
                 fit: BoxFit.cover,
+                cacheWidth: ancho,
                 errorBuilder: (context, error, stackTrace) => const Center(
                   child: Icon(Icons.broken_image, size: 50, color: Colors.grey),
                 ),
@@ -57,6 +100,7 @@ class PantallaDetalle extends ConsumerWidget {
                   : Image.file(
                       File(path),
                       fit: BoxFit.cover,
+                      cacheWidth: ancho,
                       errorBuilder: (context, error, stackTrace) =>
                           const Center(
                             child: Icon(
@@ -136,7 +180,16 @@ class PantallaDetalle extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildImageHeader(),
+            _buildImageHeader(context),
+            if (alimento.ticket != null && !kIsWeb)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: OutlinedButton.icon(
+                  onPressed: () => _verFactura(context, alimento.ticket!),
+                  icon: const Icon(Icons.receipt_long_rounded),
+                  label: const Text('Ver factura'),
+                ),
+              ),
             // Tarjeta de información principal
             Card(
               elevation: 3,

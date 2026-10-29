@@ -6,11 +6,29 @@ class Env {
 
   /// Modelos multimodales para leer fotos y facturas, en orden de preferencia.
   /// Si uno está saturado o no existe, la app prueba el siguiente.
+  ///
+  /// Primero los Flash-Lite: una factura larga obliga a escribir mucho (40
+  /// productos ≈ 4.500 tokens) y en eso son varias veces más rápidos (8,8 s
+  /// medidos contra más de 40 s de gemini-3.8-flash). Los Flash quedan de
+  /// respaldo. Solo nombres estables de la lista oficial de Google
+  /// (ai.google.dev/gemini-api/docs/models): nada de alias "-latest", que
+  /// Google cambia de modelo sin avisar.
   static const List<String> geminiModelos = [
-    'gemini-3.5-flash',
-    'gemini-flash-lite-latest',
-    'gemini-3.8-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite',
     'gemini-3.6-flash',
+    'gemini-3.8-flash',
+  ];
+
+  /// Para respuestas cortas donde importa más acertar que la velocidad (leer
+  /// una fecha impresa pequeña, estimar cuánto dura un producto): como la
+  /// respuesta es de pocas palabras, un Flash tarda casi lo mismo que un
+  /// Flash-Lite y lee mejor. gemini-3.6-flash primero: admite el
+  /// razonamiento mínimo.
+  static const List<String> geminiModelosPrecisos = [
+    'gemini-3.6-flash',
+    'gemini-3.8-flash',
+    'gemini-3.5-flash-lite',
     'gemini-3.1-flash-lite',
   ];
 

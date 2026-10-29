@@ -34,6 +34,8 @@ class _VideoBackgroundState extends State<VideoBackground> {
     super.initState();
     _controller = VideoPlayerController.asset(widget.assetPath)
       ..initialize().then((_) {
+        // Si la persona ya salió de la pantalla, no hay nada que mostrar.
+        if (!mounted) return;
         setState(() {});
         _controller.setVolume(0);
         // Si usamos loop personalizado, desactivamos el loop nativo
@@ -47,6 +49,8 @@ class _VideoBackgroundState extends State<VideoBackground> {
            _controller.pause();
            _hasFinished = true;
            widget.onVideoFinished?.call();
+        } else if (_tapado) {
+           _pausadoPorTapado = true; // arrancará al volver a verse
         } else {
            _controller.play();
         }
@@ -91,6 +95,26 @@ class _VideoBackgroundState extends State<VideoBackground> {
         widget.onVideoFinished?.call();
       }
     });
+  }
+
+  bool _tapado = false;
+  bool _pausadoPorTapado = false;
+
+  /// Cuando otra pantalla tapa esta (por ejemplo, el registro encima del
+  /// login), el video se pausa: así no hay dos videos decodificándose a la
+  /// vez. Al volver, sigue donde iba.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _tapado = !TickerMode.valuesOf(context).enabled;
+    final v = _controller.value;
+    if (_tapado && v.isInitialized && v.isPlaying) {
+      _pausadoPorTapado = true;
+      _controller.pause();
+    } else if (!_tapado && _pausadoPorTapado) {
+      _pausadoPorTapado = false;
+      _controller.play();
+    }
   }
 
   @override

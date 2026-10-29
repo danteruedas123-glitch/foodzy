@@ -54,7 +54,8 @@ class FirestoreAlimentosRepository implements AlimentosRepository {
   @override
   Future<void> eliminar(String id) => _col.doc(id).delete();
 
-  /// Copia varios alimentos de una vez (migración de datos locales).
+  /// Guarda varios alimentos de una vez (una factura, la migración de datos
+  /// locales...). Firestore admite hasta 500 operaciones por lote.
   Future<void> guardarVarios(Iterable<Alimento> alimentos) async {
     final lista = alimentos.toList();
     for (var i = 0; i < lista.length; i += 400) {
@@ -64,6 +65,18 @@ class FirestoreAlimentosRepository implements AlimentosRepository {
           ...a.toJson(),
           'actualizadoEn': FieldValue.serverTimestamp(),
         });
+      }
+      await lote.commit();
+    }
+  }
+
+  /// Borra varios alimentos en lotes, en vez de uno por uno.
+  Future<void> eliminarVarios(Iterable<String> ids) async {
+    final lista = ids.toList();
+    for (var i = 0; i < lista.length; i += 400) {
+      final lote = FirebaseFirestore.instance.batch();
+      for (final id in lista.skip(i).take(400)) {
+        lote.delete(_col.doc(id));
       }
       await lote.commit();
     }

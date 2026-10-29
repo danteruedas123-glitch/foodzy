@@ -14,7 +14,9 @@ import 'package:foodzy/features/nube/hogar_provider.dart';
 /// solo en este teléfono si no.
 final listaCompraRepositoryProvider =
     FutureProvider<ListaCompraRepository>((ref) async {
-  if (Nube.disponible && ref.watch(authProvider).esNube) {
+  // Solo importa quién es la cuenta: no se reconstruye cuando Firebase
+  // renueva la sesión (cada hora) ni cuando cambia el nombre o la foto.
+  if (Nube.disponible && ref.watch(authProvider.select((a) => a.esNube))) {
     // Si la nube no responde (sin internet o base sin crear), se usa el teléfono.
     final hogar = await ref.watch(hogarProvider.future).then<Hogar?>((h) => h, onError: (_) => null);
     if (hogar != null) return FirestoreListaCompraRepository(hogar.id);
@@ -25,14 +27,32 @@ final listaCompraRepositoryProvider =
 class ListaCompraNotifier extends AsyncNotifier<List<ItemCompra>> {
   late ListaCompraRepository _repo;
 
+  bool get _enNube => _repo is FirestoreListaCompraRepository;
+
   @override
   Future<List<ItemCompra>> build() async {
     _repo = await ref.watch(listaCompraRepositoryProvider.future);
 
-    // Si otra persona del hogar cambia la lista, se actualiza sola.
+    // En la nube la lista llega por el flujo en tiempo real: el primer evento
+    // es la carga inicial y los siguientes, los cambios de cualquier persona
+    // del hogar. Cada evento ya trae la lista, así que no se vuelve a leer la
+    // colección entera tras cada cambio.
     if (_repo case final FirestoreListaCompraRepository nube) {
-      final sub = nube.cambios().skip(1).listen((_) => _recargar());
+      final inicial = Completer<List<ItemCompra>>();
+      final sub = nube.flujo().listen(
+        (l) {
+          if (inicial.isCompleted) {
+            state = AsyncData(_ordenar(l));
+          } else {
+            inicial.complete(_ordenar(l));
+          }
+        },
+        onError: (Object e, StackTrace st) {
+          if (!inicial.isCompleted) inicial.completeError(e, st);
+        },
+      );
       ref.onDispose(sub.cancel);
+      return inicial.future;
     }
     return _ordenar(await _repo.obtener());
   }
@@ -43,8 +63,23 @@ class ListaCompraNotifier extends AsyncNotifier<List<ItemCompra>> {
       return b.creado.compareTo(a.creado);
     });
 
-  Future<void> _recargar() async {
-    state = AsyncData(_ordenar(await _repo.obtener()));
+  List<ItemCompra> get _actuales => state.value ?? const <ItemCompra>[];
+
+  /// Aplica un cambio sin volver a leer la lista. En el teléfono se guarda y
+  /// luego se muestra; en la nube se muestra al instante y Firestore confirma
+  /// después (con mala señal, esperar al servidor congelaba la pantalla). Si
+  /// la nube lo rechaza, el flujo en tiempo real devuelve la lista a como estaba.
+  Future<void> _aplicar(
+    List<ItemCompra> nueva,
+    Future<void> Function() escribir,
+  ) async {
+    if (_enNube) {
+      state = AsyncData(_ordenar(nueva));
+      unawaited(escribir().catchError((Object _) {}));
+      return;
+    }
+    await escribir();
+    state = AsyncData(_ordenar(nueva));
   }
 
   int _ultimoId = 0;
@@ -62,16 +97,16 @@ class ListaCompraNotifier extends AsyncNotifier<List<ItemCompra>> {
   Future<bool> agregar(String nombre, {String? cantidad}) async {
     final limpio = nombre.trim();
     if (limpio.isEmpty) return false;
-    final actuales = state.value ?? const <ItemCompra>[];
+    final actuales = _actuales;
     final clave = claveNombre(limpio);
     if (actuales.any((i) => !i.comprado && claveNombre(i.nombre) == clave)) return false;
-    await _repo.guardar(ItemCompra(
+    final item = ItemCompra(
       id: _nuevoId(),
       nombre: limpio,
       cantidad: cantidad,
       creado: DateTime.now(),
-    ));
-    await _recargar();
+    );
+    await _aplicar([...actuales, item], () => _repo.guardar(item));
     return true;
   }
 
@@ -89,34 +124,57 @@ class ListaCompraNotifier extends AsyncNotifier<List<ItemCompra>> {
   }
 
   Future<void> alternar(ItemCompra item) async {
-    await _repo.guardar(item.conComprado(!item.comprado));
-    await _recargar();
+    final cambiado = item.conComprado(!item.comprado);
+    await _aplicar(
+      [for (final i in _actuales) i.id == item.id ? cambiado : i],
+      () => _repo.guardar(cambiado),
+    );
   }
 
   Future<void> eliminar(String id) async {
-    await _repo.eliminar(id);
-    await _recargar();
+    await _aplicar(
+      _actuales.where((i) => i.id != id).toList(),
+      () => _repo.eliminar(id),
+    );
   }
 
   Future<void> limpiarComprados() async {
-    for (final i in (state.value ?? const <ItemCompra>[]).where((i) => i.comprado)) {
-      await _repo.eliminar(i.id);
-    }
-    await _recargar();
+    final ids = [for (final i in _actuales) if (i.comprado) i.id];
+    if (ids.isEmpty) return;
+    await _aplicar(
+      _actuales.where((i) => !i.comprado).toList(),
+      () async {
+        if (_repo case final FirestoreListaCompraRepository nube) {
+          return nube.eliminarVarios(ids);
+        }
+        for (final id in ids) {
+          await _repo.eliminar(id);
+        }
+      },
+    );
   }
 
   /// Al registrar una compra, tacha de la lista lo que ya se compró.
   Future<int> marcarCompradosPorNombre(Iterable<String> nombres) async {
     final claves = nombres.map(claveNombre).toSet();
-    var n = 0;
-    for (final i in state.value ?? const <ItemCompra>[]) {
-      if (!i.comprado && claves.contains(claveNombre(i.nombre))) {
-        await _repo.guardar(i.conComprado(true));
-        n++;
-      }
-    }
-    if (n > 0) await _recargar();
-    return n;
+    final tachados = [
+      for (final i in _actuales)
+        if (!i.comprado && claves.contains(claveNombre(i.nombre))) i.conComprado(true),
+    ];
+    if (tachados.isEmpty) return 0;
+    final porId = {for (final i in tachados) i.id: i};
+    await _aplicar(
+      [for (final i in _actuales) porId[i.id] ?? i],
+      () async {
+        if (_repo case final FirestoreListaCompraRepository nube) {
+          return nube.guardarVarios(tachados);
+        }
+        for (final i in tachados) {
+          await _repo.guardar(i);
+        }
+      },
+    );
+    return tachados.length;
   }
 }
 
