@@ -6,11 +6,15 @@ class Env {
 
   /// Modelos multimodales para leer fotos y facturas, en orden de preferencia.
   /// Si uno está saturado o no existe, la app prueba el siguiente.
+  ///
+  /// Primero los Flash (leen mejor las facturas) y luego los Flash-Lite (más
+  /// rápidos, de respaldo). Solo nombres estables de la lista oficial de
+  /// Google (ai.google.dev/gemini-api/docs/models): nada de alias "-latest",
+  /// que Google cambia de modelo sin avisar.
   static const List<String> geminiModelos = [
-    'gemini-3.5-flash',
-    'gemini-flash-lite-latest',
     'gemini-3.8-flash',
     'gemini-3.6-flash',
+    'gemini-3.5-flash-lite',
     'gemini-3.1-flash-lite',
   ];
 

@@ -32,9 +32,10 @@ class _ErrorGemini implements Exception {
 /// Cliente común de Gemini: prueba una cadena de modelos con reintentos y
 /// devuelve el JSON ya decodificado. Lo usan el escáner y las recetas.
 ///
-/// Habla con la API REST directamente (con `http`) para poder pedir un nivel
-/// de razonamiento bajo: leer una foto o una factura no necesita que el
-/// modelo "piense" a fondo, y hacerlo era lo que más demoraba cada respuesta.
+/// Habla con la API REST directamente (con `http`) para poder pedir el nivel
+/// de razonamiento más bajo que acepte cada modelo: leer una foto o una
+/// factura no necesita que el modelo "piense" a fondo, y hacerlo era lo que
+/// más demoraba cada respuesta.
 class GeminiClient {
   GeminiClient({required this.apiKey, this.cuota, http.Client? cliente})
       : _http = cliente ?? _compartido;
@@ -55,7 +56,14 @@ class GeminiClient {
   static String? _claveRecordada;
   static String? _ultimoQueRespondio;
   static final _noExisten = <String>{};
-  static final _sinNivelDeRazonamiento = <String>{};
+
+  /// Niveles de razonamiento, del más rápido al más lento. No todos los
+  /// modelos admiten todos (gemini-3.8-flash no admite "minimal"); `null` es
+  /// no pedir ninguno y dejar el que el modelo trae por defecto.
+  static const _niveles = ['minimal', 'low', null];
+
+  /// Por modelo, el primer nivel que aceptó (posición en [_niveles]).
+  static final _nivelPorModelo = <String, int>{};
 
   /// Modelos en el orden en que se prueban: primero el último que respondió.
   List<String> _modelosEnOrden() {
@@ -64,7 +72,7 @@ class GeminiClient {
       _claveRecordada = clave;
       _ultimoQueRespondio = null;
       _noExisten.clear();
-      _sinNivelDeRazonamiento.clear();
+      _nivelPorModelo.clear();
     }
     final ultimo = _ultimoQueRespondio;
     return [
@@ -152,26 +160,30 @@ class GeminiClient {
     }
   }
 
-  /// Una petición a un modelo. Pide razonamiento bajo; si el modelo no
-  /// admite elegir el nivel, repite la petición sin pedirlo y lo recuerda.
+  /// Una petición a un modelo con el nivel de razonamiento más bajo que
+  /// acepte. Si rechaza un nivel, prueba el siguiente y recuerda cuál sirvió
+  /// para no repetir el rechazo en la próxima petición.
   Future<String> _generar(String modelo, List<Map<String, dynamic>> partes) async {
-    final conNivel = !_sinNivelDeRazonamiento.contains(modelo);
-    try {
-      return await _llamar(modelo, partes, nivelBajo: conNivel);
-    } on _ErrorGemini catch (e) {
-      final rechazoElNivel = conNivel &&
-          e.codigo == 400 &&
-          e.mensaje.toLowerCase().contains('think');
-      if (!rechazoElNivel) rethrow;
-      _sinNivelDeRazonamiento.add(modelo);
-      return _llamar(modelo, partes, nivelBajo: false);
+    var i = _nivelPorModelo[modelo] ?? 0;
+    while (true) {
+      try {
+        final texto = await _llamar(modelo, partes, nivel: _niveles[i]);
+        _nivelPorModelo[modelo] = i;
+        return texto;
+      } on _ErrorGemini catch (e) {
+        final rechazoElNivel = _niveles[i] != null &&
+            e.codigo == 400 &&
+            e.mensaje.toLowerCase().contains('think');
+        if (!rechazoElNivel) rethrow;
+        _nivelPorModelo[modelo] = ++i;
+      }
     }
   }
 
   Future<String> _llamar(
     String modelo,
     List<Map<String, dynamic>> partes, {
-    required bool nivelBajo,
+    required String? nivel,
   }) async {
     final respuesta = await _http
         .post(
@@ -187,7 +199,7 @@ class GeminiClient {
             'generationConfig': {
               'responseMimeType': 'application/json',
               'temperature': 0.4,
-              if (nivelBajo) 'thinkingConfig': {'thinkingLevel': 'low'},
+              if (nivel != null) 'thinkingConfig': {'thinkingLevel': nivel},
             },
           }),
         )

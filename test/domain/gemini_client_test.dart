@@ -42,7 +42,7 @@ void main() {
   final primero = Env.geminiModelos[0];
   final segundo = Env.geminiModelos[1];
 
-  test('pide razonamiento bajo y devuelve el JSON sin las partes de razonamiento',
+  test('pide el razonamiento mínimo y devuelve el JSON sin las partes de razonamiento',
       () async {
     late Map<String, dynamic> cuerpo;
     final cliente = GeminiClient(
@@ -54,18 +54,45 @@ void main() {
     );
 
     expect(await cliente.pedir('hola'), {'ok': true});
-    expect(cuerpo['generationConfig']['thinkingConfig'], {'thinkingLevel': 'low'});
+    expect(cuerpo['generationConfig']['thinkingConfig'], {'thinkingLevel': 'minimal'});
   });
 
-  test('si el modelo no admite elegir el nivel, repite sin pedirlo', () async {
-    final pedidos = <bool>[];
+  /// El nivel pedido en una petición, o null si no pidió ninguno.
+  String? nivelDe(http.Request r) {
+    final config = (jsonDecode(r.body) as Map)['generationConfig'] as Map;
+    return (config['thinkingConfig'] as Map?)?['thinkingLevel'] as String?;
+  }
+
+  test('si el modelo no admite "minimal", usa "low" y lo recuerda', () async {
+    final pedidos = <String?>[];
     final cliente = GeminiClient(
       apiKey: clave(),
       cliente: MockClient((r) async {
-        final config = (jsonDecode(r.body) as Map)['generationConfig'] as Map;
-        final conNivel = config.containsKey('thinkingConfig');
-        pedidos.add(conNivel);
-        if (conNivel) {
+        final nivel = nivelDe(r);
+        pedidos.add(nivel);
+        if (nivel == 'minimal') {
+          return error(400, 'INVALID_ARGUMENT', 'Thinking level MINIMAL is not supported for this model.');
+        }
+        return respuestaOk({'ok': true});
+      }),
+    );
+
+    await cliente.pedir('hola');
+    expect(pedidos, ['minimal', 'low']);
+
+    pedidos.clear();
+    await cliente.pedir('otra vez');
+    expect(pedidos, ['low'], reason: 'no repite el rechazo');
+  });
+
+  test('si el modelo no admite elegir el nivel, repite sin pedirlo', () async {
+    final pedidos = <String?>[];
+    final cliente = GeminiClient(
+      apiKey: clave(),
+      cliente: MockClient((r) async {
+        final nivel = nivelDe(r);
+        pedidos.add(nivel);
+        if (nivel != null) {
           return error(400, 'INVALID_ARGUMENT', 'Thinking level is not supported for this model.');
         }
         return respuestaOk([1, 2]);
@@ -73,12 +100,12 @@ void main() {
     );
 
     expect(await cliente.pedir('hola'), [1, 2]);
-    expect(pedidos, [true, false]);
+    expect(pedidos, ['minimal', 'low', null]);
 
     // La segunda vez ya no lo intenta con nivel.
     pedidos.clear();
     await cliente.pedir('otra vez');
-    expect(pedidos, [false]);
+    expect(pedidos, [null]);
   });
 
   test('un modelo que no existe no se vuelve a probar en la siguiente petición',
