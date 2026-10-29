@@ -1,12 +1,24 @@
 /// El grupo (familia, pareja, compañeros) que comparte una despensa.
 class Hogar {
-  const Hogar({required this.id, required this.codigo, required this.miembros});
+  const Hogar({
+    required this.id,
+    required this.codigo,
+    required this.miembros,
+    this.esDueno = false,
+  });
 
   final String id;
 
   /// Código corto que se comparte para invitar a otra persona.
   final String codigo;
   final int miembros;
+
+  /// `true` si la persona con sesión creó este hogar: solo ella puede
+  /// cambiar el código de invitación.
+  final bool esDueno;
+
+  Hogar conCodigo(String nuevo) =>
+      Hogar(id: id, codigo: nuevo, miembros: miembros, esDueno: esDueno);
 }
 
 class HogarError implements Exception {
@@ -27,11 +39,16 @@ abstract interface class HogarRepository {
   /// El id del hogar al que invita [codigo], o `null` si no existe.
   Future<String?> hogarIdPorCodigo(String codigo);
 
-  Future<void> agregarMiembro(String hogarId, String uid);
+  /// Añade a [uid] al hogar. Las reglas de seguridad exigen el [codigo]
+  /// vigente del hogar.
+  Future<void> agregarMiembro(String hogarId, String uid, {required String codigo});
   Future<void> quitarMiembro(String hogarId, String uid);
 
   /// Guarda cuál es el hogar actual de [uid].
   Future<void> asignar(String uid, String hogarId);
+
+  /// Le pone un código nuevo al hogar y borra el anterior. Devuelve el nuevo.
+  Future<String> cambiarCodigo(String hogarId, String codigoActual);
 }
 
 /// Copia la despensa de un hogar a otro.
@@ -71,7 +88,7 @@ class HogarService {
     // Las reglas rechazan, por ejemplo, entrar a un hogar que quedó vacío; en
     // ese caso se explica en español en vez de mostrar el error técnico.
     try {
-      await _repo.agregarMiembro(nuevoId, uid);
+      await _repo.agregarMiembro(nuevoId, uid, codigo: limpio);
     } catch (_) {
       throw const HogarError(
           'No pude unirte a ese hogar. Puede que el código ya no esté activo; revísalo con quien te invitó.');
@@ -115,5 +132,19 @@ class HogarService {
       // Ya tiene su hogar propio asignado; ver el comentario de [unirse].
     }
     return nuevo;
+  }
+
+  /// Le pone un código de invitación nuevo a [hogar]. El anterior deja de
+  /// servir para entrar; quienes ya están dentro siguen dentro. Solo el
+  /// dueño puede hacerlo.
+  Future<Hogar> cambiarCodigo(Hogar hogar) async {
+    if (!hogar.esDueno) {
+      throw const HogarError('Solo quien creó el hogar puede cambiar el código.');
+    }
+    try {
+      return hogar.conCodigo(await _repo.cambiarCodigo(hogar.id, hogar.codigo));
+    } catch (_) {
+      throw const HogarError('No pude cambiar el código. Revisa tu conexión e intenta de nuevo.');
+    }
   }
 }

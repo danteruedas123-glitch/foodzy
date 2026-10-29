@@ -18,7 +18,7 @@ npm install
 npm test
 ```
 
-La primera vez descarga el emulador. Deben pasar las 30 pruebas. Los mensajes
+La primera vez descarga el emulador. Deben pasar todas las pruebas. Los mensajes
 `PERMISSION_DENIED` que aparecen en pantalla son normales: son las pruebas que
 comprueban que algo **no** se puede hacer.
 

@@ -54,6 +54,13 @@ class HogarNotifier extends AsyncNotifier<Hogar?> {
     await FirestoreAlimentosRepository(haciaHogarId).guardarVarios(viejos);
   }
 
+  /// Cambia el código de invitación (solo el dueño). El anterior deja de servir.
+  Future<void> cambiarCodigo() async {
+    final actual = state.value;
+    if (actual == null) return;
+    state = AsyncData(await _servicio.cambiarCodigo(actual));
+  }
+
   /// Sale del hogar compartido y vuelve a tener uno propio, vacío.
   Future<void> salir() async {
     final auth = ref.read(authProvider);

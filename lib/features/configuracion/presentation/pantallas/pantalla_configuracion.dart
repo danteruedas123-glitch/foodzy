@@ -201,6 +201,12 @@ class _PantallaConfiguracionState extends ConsumerState<PantallaConfiguracion> {
                     icon: const Icon(Icons.ios_share_rounded, size: 18),
                     label: const Text('Invitar'),
                   ),
+                  if (h.esDueno)
+                    OutlinedButton.icon(
+                      onPressed: _cambiarCodigo,
+                      icon: const Icon(Icons.autorenew_rounded, size: 18),
+                      label: const Text('Cambiar código'),
+                    ),
                 ],
               ),
               const SizedBox(height: 6),
@@ -250,7 +256,7 @@ class _PantallaConfiguracionState extends ConsumerState<PantallaConfiguracion> {
                 autofocus: true,
                 textCapitalization: TextCapitalization.characters,
                 decoration: const InputDecoration(
-                  hintText: 'Código de 6 letras',
+                  hintText: 'Código de invitación',
                 ),
               ),
               CheckboxListTile(
@@ -289,6 +295,44 @@ class _PantallaConfiguracionState extends ConsumerState<PantallaConfiguracion> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
+  /// Genera un código nuevo: el anterior deja de servir, así quien lo tenga
+  /// (por ejemplo, alguien que ya no debe entrar) no puede volver a unirse.
+  Future<void> _cambiarCodigo() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Cambiar el código?'),
+        content: const Text(
+          'El código actual dejará de servir para entrar a tu hogar. '
+          'Quienes ya están dentro siguen dentro.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Cambiar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref.read(hogarProvider.notifier).cambiarCodigo();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Listo: tu hogar tiene un código nuevo.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
       }
     }
   }
