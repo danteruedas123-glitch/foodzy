@@ -1,7 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:foodzy/core/env.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
 class ScannerException implements Exception {
@@ -19,13 +20,59 @@ class CuotaIA {
   final Future<void> Function() registrar;
 }
 
+/// Error de la API de Gemini, con su código HTTP y el mensaje que envió.
+class _ErrorGemini implements Exception {
+  const _ErrorGemini(this.codigo, this.mensaje);
+  final int codigo;
+  final String mensaje;
+  @override
+  String toString() => '$codigo: $mensaje';
+}
+
 /// Cliente común de Gemini: prueba una cadena de modelos con reintentos y
 /// devuelve el JSON ya decodificado. Lo usan el escáner y las recetas.
+///
+/// Habla con la API REST directamente (con `http`) para poder pedir un nivel
+/// de razonamiento bajo: leer una foto o una factura no necesita que el
+/// modelo "piense" a fondo, y hacerlo era lo que más demoraba cada respuesta.
 class GeminiClient {
-  GeminiClient({required this.apiKey, this.cuota});
+  GeminiClient({required this.apiKey, this.cuota, http.Client? cliente})
+      : _http = cliente ?? _compartido;
+
+  /// Una sola conexión para toda la app: las peticiones seguidas reutilizan
+  /// la conexión segura ya abierta en vez de negociar una nueva cada vez.
+  static final _compartido = http.Client();
 
   final String apiKey;
   final CuotaIA? cuota;
+  final http.Client _http;
+
+  static const _base = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+  // Lo que se aprende de los modelos se recuerda entre peticiones (mientras
+  // la app esté abierta y no cambie la clave), para no repetir en cada
+  // escaneo intentos que ya se sabe que fallan.
+  static String? _claveRecordada;
+  static String? _ultimoQueRespondio;
+  static final _noExisten = <String>{};
+  static final _sinNivelDeRazonamiento = <String>{};
+
+  /// Modelos en el orden en que se prueban: primero el último que respondió.
+  List<String> _modelosEnOrden() {
+    final clave = apiKey.trim();
+    if (_claveRecordada != clave) {
+      _claveRecordada = clave;
+      _ultimoQueRespondio = null;
+      _noExisten.clear();
+      _sinNivelDeRazonamiento.clear();
+    }
+    final ultimo = _ultimoQueRespondio;
+    return [
+      ?ultimo,
+      for (final m in Env.geminiModelos)
+        if (m != ultimo && !_noExisten.contains(m)) m,
+    ];
+  }
 
   Future<dynamic> pedir(String prompt, {List<XFile> imagenes = const []}) async {
     if (apiKey.trim().isEmpty) {
@@ -36,11 +83,16 @@ class GeminiClient {
 
     cuota?.verificar();
 
-    final partes = <Part>[TextPart(prompt)];
-    for (final img in imagenes) {
-      partes.add(DataPart(_mime(img), await img.readAsBytes()));
-    }
-    final contenido = [Content.multi(partes)];
+    final partes = <Map<String, dynamic>>[
+      {'text': prompt},
+      for (final img in imagenes)
+        {
+          'inlineData': {
+            'mimeType': _mime(img),
+            'data': base64Encode(await img.readAsBytes()),
+          },
+        },
+    ];
 
     // Se prueba cada modelo; si está saturado se reintenta una vez y, si
     // sigue igual (o no existe), se pasa al siguiente de la lista.
@@ -52,36 +104,27 @@ class GeminiClient {
     final descartados = <String>{};
     for (var vuelta = 0; vuelta < 2 && texto == null; vuelta++) {
       var huboSaturacion = false;
-      for (final nombre in Env.geminiModelos) {
+      for (final nombre in _modelosEnOrden()) {
         if (descartados.contains(nombre)) continue;
-        final model = GenerativeModel(
-          model: nombre,
-          apiKey: apiKey.trim(),
-          generationConfig: GenerationConfig(
-            responseMimeType: 'application/json',
-            temperature: 0.4,
-          ),
-        );
         try {
-          final respuesta = await model
-              .generateContent(contenido)
-              .timeout(const Duration(seconds: 40));
-          texto = respuesta.text;
+          texto = await _generar(nombre, partes);
+          _ultimoQueRespondio = nombre;
           break;
-        } on GenerativeAIException catch (e) {
-          ultimoError = e.message;
-          final m = e.message.toLowerCase();
+        } on _ErrorGemini catch (e) {
+          ultimoError = e.toString();
+          final m = ultimoError.toLowerCase();
           if (m.contains('api key') || m.contains('api_key')) {
-            throw ScannerException(_traducir(e.message));
+            throw ScannerException(_traducir(ultimoError));
           }
-          final saturado = m.contains('demand') ||
+          final saturado = e.codigo == 503 ||
+              m.contains('demand') ||
               m.contains('overloaded') ||
-              m.contains('unavailable') ||
-              m.contains('503');
+              m.contains('unavailable');
           if (saturado) {
             huboSaturacion = true;
           } else {
-            descartados.add(nombre); // no existe / sin acceso
+            descartados.add(nombre); // sin acceso, sin cupo...
+            if (e.codigo == 404) _noExisten.add(nombre);
           }
         } catch (e) {
           ultimoError = e.toString();
@@ -109,6 +152,76 @@ class GeminiClient {
     }
   }
 
+  /// Una petición a un modelo. Pide razonamiento bajo; si el modelo no
+  /// admite elegir el nivel, repite la petición sin pedirlo y lo recuerda.
+  Future<String> _generar(String modelo, List<Map<String, dynamic>> partes) async {
+    final conNivel = !_sinNivelDeRazonamiento.contains(modelo);
+    try {
+      return await _llamar(modelo, partes, nivelBajo: conNivel);
+    } on _ErrorGemini catch (e) {
+      final rechazoElNivel = conNivel &&
+          e.codigo == 400 &&
+          e.mensaje.toLowerCase().contains('think');
+      if (!rechazoElNivel) rethrow;
+      _sinNivelDeRazonamiento.add(modelo);
+      return _llamar(modelo, partes, nivelBajo: false);
+    }
+  }
+
+  Future<String> _llamar(
+    String modelo,
+    List<Map<String, dynamic>> partes, {
+    required bool nivelBajo,
+  }) async {
+    final respuesta = await _http
+        .post(
+          Uri.parse('$_base/$modelo:generateContent'),
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey.trim(),
+          },
+          body: jsonEncode({
+            'contents': [
+              {'role': 'user', 'parts': partes},
+            ],
+            'generationConfig': {
+              'responseMimeType': 'application/json',
+              'temperature': 0.4,
+              if (nivelBajo) 'thinkingConfig': {'thinkingLevel': 'low'},
+            },
+          }),
+        )
+        .timeout(const Duration(seconds: 40));
+
+    final cuerpo = utf8.decode(respuesta.bodyBytes);
+    Object? json;
+    try {
+      json = jsonDecode(cuerpo);
+    } catch (_) {
+      json = null;
+    }
+
+    if (respuesta.statusCode != 200) {
+      final error = json is Map ? json['error'] : null;
+      final mensaje = error is Map
+          ? '${error['status'] ?? ''} ${error['message'] ?? ''}'.trim()
+          : cuerpo;
+      throw _ErrorGemini(respuesta.statusCode, mensaje);
+    }
+
+    // Se juntan los textos de la respuesta, sin las partes de razonamiento.
+    final candidatos = json is Map ? json['candidates'] : null;
+    if (candidatos is! List || candidatos.isEmpty) return '';
+    final contenido = candidatos.first is Map ? candidatos.first['content'] : null;
+    final partesRespuesta = contenido is Map ? contenido['parts'] : null;
+    if (partesRespuesta is! List) return '';
+    return partesRespuesta
+        .whereType<Map>()
+        .where((p) => p['thought'] != true && p['text'] is String)
+        .map((p) => p['text'] as String)
+        .join();
+  }
+
   String _limpiar(String texto) {
     var t = texto.trim();
     if (t.startsWith('```')) {
@@ -133,7 +246,7 @@ class GeminiClient {
     if (m.contains('api key') || m.contains('api_key')) {
       return 'La API Key de Gemini no es válida. Revísala en Ajustes.';
     }
-    if (m.contains('quota') || m.contains('429')) {
+    if (m.contains('quota') || m.contains('429') || m.contains('resource_exhausted')) {
       return 'Se alcanzó el límite de uso de Gemini. Intenta de nuevo en un momento.';
     }
     if (m.contains('demand') || m.contains('overloaded') || m.contains('503')) {
