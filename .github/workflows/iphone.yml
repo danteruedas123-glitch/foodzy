@@ -27,7 +27,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: subosito/flutter-action@v2
         with:
@@ -40,7 +40,14 @@ jobs:
 
       - name: Compilar sin firmar (Sideloadly la firma con tu Apple ID)
         # COMPRAS_PRUEBA: Premium de prueba, igual que en las compilaciones de desarrollo.
-        run: flutter build ios --release --no-codesign --dart-define=COMPRAS_PRUEBA=true
+        # Las librerías usan Swift Package Manager; el proyecto no usa CocoaPods.
+        # Si falla, las líneas de error quedan en el resumen público de la ejecución.
+        run: |
+          set -o pipefail
+          if ! flutter build ios --release --no-codesign --dart-define=COMPRAS_PRUEBA=true 2>&1 | tee compilacion.log; then
+            grep -iE "error|failed" compilacion.log | tail -30 | while IFS= read -r linea; do echo "::error::$linea"; done
+            exit 1
+          fi
 
       - name: Empaquetar Foodzy.ipa
         run: |
