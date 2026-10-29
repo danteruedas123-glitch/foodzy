@@ -120,12 +120,33 @@ class Alimento {
   /// El reloj entra como parámetro, no se lee dentro.
   Duration tiempoRestante(DateTime ahora) => fechaVencimiento.difference(ahora);
 
-  bool estaVencido(DateTime ahora) => tiempoRestante(ahora).isNegative;
+  /// Días de calendario que faltan para el día de vencimiento: 0 si vence
+  /// hoy, negativo si ya venció. La fecha se guarda en UTC, así que se pasa a
+  /// hora local antes de tomar el día (si no, en algunos países caía en el
+  /// día anterior). Se resta en UTC para que un cambio de horario de verano
+  /// no le quite un día a la cuenta.
+  int diasParaVencer(DateTime ahora) {
+    final f = fechaVencimiento.toLocal();
+    final a = ahora.toLocal();
+    return DateTime.utc(f.year, f.month, f.day)
+        .difference(DateTime.utc(a.year, a.month, a.day))
+        .inDays;
+  }
+
+  /// Vencido es que ya pasó el día de vencimiento: el día mismo aún "vence
+  /// hoy" (una etiqueta que dice "vence el 30" sirve hasta el final del 30).
+  /// Lo que no tiene fecha o no vence nunca está vencido. Es la misma regla
+  /// de las etiquetas, Inicio, las recetas y los avisos.
+  bool estaVencido(DateTime ahora) =>
+      !sinFechaVencimiento && !noVence && diasParaVencer(ahora) < 0;
 
   /// Marca interna de "aún no se conoce la fecha de vencimiento".
   static final DateTime sinFecha = DateTime(1970, 1, 1);
 
-  bool get sinFechaVencimiento => fechaVencimiento == sinFecha;
+  /// Se compara el año y no con `==`: al guardarse, la fecha vuelve en UTC y
+  /// `==` exige además la misma zona horaria, así que un alimento "sin fecha"
+  /// dejaba de serlo al leerlo de la base.
+  bool get sinFechaVencimiento => fechaVencimiento.year <= 1970;
 
   /// Marca interna de "este alimento no vence" (sal, azúcar, miel...).
   static final DateTime nuncaVence = DateTime(9999, 12, 31);

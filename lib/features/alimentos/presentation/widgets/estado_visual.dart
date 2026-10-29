@@ -10,15 +10,9 @@ class EstadoVisual {
   final IconData icono;
 }
 
-int _diasHasta(DateTime fecha, DateTime ahora) {
-  final a = DateTime(ahora.year, ahora.month, ahora.day);
-  final b = DateTime(fecha.year, fecha.month, fecha.day);
-  return b.difference(a).inDays;
-}
-
 /// Días que faltan para vencer (negativo si ya venció).
 int diasParaVencer(Alimento a, [DateTime? ahora]) =>
-    _diasHasta(a.fechaVencimiento, ahora ?? DateTime.now());
+    a.diasParaVencer(ahora ?? DateTime.now());
 
 /// `true` si está disponible y vence en [dias] días o menos (o ya venció).
 bool venceEn(Alimento a, int dias) =>

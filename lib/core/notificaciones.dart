@@ -154,7 +154,7 @@ class NotificacionesService {
       for (final a in alimentos) {
         if (a.estado is! Disponible || a.sinFechaVencimiento || a.noVence) continue;
 
-        final f = a.fechaVencimiento;
+        final f = a.fechaVencimiento.toLocal(); // se guarda en UTC
         final finDelDia = tz.TZDateTime(tz.local, f.year, f.month, f.day, 23, 59);
         if (finDelDia.isBefore(ahora)) continue; // ya venció
 
