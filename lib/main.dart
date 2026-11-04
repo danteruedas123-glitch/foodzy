@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foodzy/core/notificaciones.dart';
@@ -14,6 +15,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
+  // En release, debugPrint no escribe nada: los errores de la IA, de la red y
+  // de Firebase no deben quedar en el log del teléfono, que se lee con
+  // `adb logcat` (hallazgo de seguridad H-08).
+  if (kReleaseMode) debugPrint = (String? message, {int? wrapWidth}) {};
   WidgetsFlutterBinding.ensureInitialized();
 
   // Preferencias (y con ellas la clave cifrada de Gemini) y Firebase se
