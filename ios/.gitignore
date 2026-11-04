@@ -32,3 +32,6 @@ Runner/GeneratedPluginRegistrant.*
 !default.mode2v3
 !default.pbxuser
 !default.perspectivev3
+
+# La configuración de iPhone va en lib/core/firebase_opciones.dart; este archivo no se usa.
+Runner/GoogleService-Info.plist

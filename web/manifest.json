@@ -1,11 +1,11 @@
 {
-    "name": "foodzy",
-    "short_name": "foodzy",
+    "name": "Foodzy",
+    "short_name": "Foodzy",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#16A34A",
+    "background_color": "#f6fbf3",
     "theme_color": "#16A34A",
-    "description": "A new Flutter project.",
+    "description": "Tu despensa inteligente: escanea tu factura, recibe avisos antes de que se dañe y cocina con lo que tienes.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
@@ -31,5 +31,6 @@
             "type": "image/png",
             "purpose": "maskable"
         }
-    ]
+    ],
+    "lang": "es"
 }

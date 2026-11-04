@@ -29,9 +29,15 @@ class ProductoCodigo {
 /// Consulta Open Food Facts, una base de datos abierta y gratuita de
 /// productos alimenticios de todo el mundo.
 class CodigoBarrasService {
+  /// Códigos UPC-E, EAN-8, UPC-A y EAN-13 (de 6 a 14 dígitos): solo números.
+  static final _codigoValido = RegExp(r'^\d{6,14}$');
+
   /// Devuelve el producto o `null` si el código no está en la base.
   /// Lanza una excepción si no hay conexión.
   Future<ProductoCodigo?> buscar(String codigo) async {
+    // El código va dentro de la ruta de la URL: con "/" o ".." cambiaría el
+    // endpoint al que se llama (hallazgo de seguridad H-10).
+    if (!_codigoValido.hasMatch(codigo)) return null;
     final uri = Uri.https(
       'world.openfoodfacts.org',
       '/api/v2/product/$codigo.json',

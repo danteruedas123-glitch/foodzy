@@ -25,7 +25,29 @@ flutter run --dart-define=GEMINI_API_KEY=tu_clave
 ```
 
 La clave de Gemini se obtiene gratis en <https://aistudio.google.com/apikey>.
-También se puede pegar dentro de la app en **Ajustes → Inteligencia artificial**.
+La de `--dart-define` solo se usa en modo debug; en release cada persona la pega
+dentro de la app en **Ajustes → Inteligencia artificial** y se guarda cifrada.
+
+## Compilar el release (Android)
+
+```bash
+flutter build apk --release --obfuscate --split-debug-info=build/simbolos
+```
+
+- `--obfuscate` cambia los nombres del código Dart por otros sin sentido, y
+  `--split-debug-info` guarda aparte los símbolos para poder leer los errores
+  (`flutter symbolize`). No borres `build/simbolos` de una versión publicada.
+- Se firma con la llave que indique `android/key.properties`, que no está en el
+  repositorio:
+
+  ```properties
+  storePassword=...
+  keyPassword=...
+  keyAlias=subida
+  storeFile=C:/ruta/fuera/del/repo/foodzy-subida.jks
+  ```
+
+  Sin ese archivo, Gradle avisa y firma con la llave de debug.
 
 ## Modo local y modo nube
 
@@ -55,5 +77,9 @@ Para iOS hay que añadir también `GoogleService-Info.plist` (ver la documentaci
 
 ## Seguridad
 
-La clave de Gemini va dentro de la app. Es suficiente para uso personal; si vas a
-publicarla, conviene mover las llamadas a la IA a un servidor propio.
+- La clave de Gemini no va dentro del release: cada persona pega la suya y se
+  guarda cifrada (Android Keystore / iOS Keychain). Para una versión comercial,
+  conviene mover las llamadas a la IA a un servidor propio.
+- Los datos de la app no entran en las copias de seguridad de Android y el
+  release no escribe en el log.
+- La auditoría completa (OWASP Mobile Top 10) está en [`docs/seguridad/`](docs/seguridad/).
