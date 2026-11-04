@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "235830420548-95o3b3shl5vsbo8vpjn30q19uv73imbi.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.foodzy",
+            "certificate_hash": "07dffe51e07e08601c82510e1bb54c3cacccaff5"
+          }
+        },
+        {
+          "client_id": "235830420548-inpq2m5jbtvit17f71s0c011rpl0o0b0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.foodzy",
+            "certificate_hash": "830714b582386ddba4376c4b0d21b2fb897f1fad"
+          }
+        },
+        {
           "client_id": "235830420548-q8r3q7jn3r3vqltf1alv3ljp0m1j93r1.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
@@ -37,6 +53,13 @@
             {
               "client_id": "235830420548-b0enkgidpmbrnhittv43ip4l4lrsin4o.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "235830420548-0trukmeq0g8rito4j9mmjsb9008q02uh.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.foodzy.app"
+              }
             }
           ]
         }

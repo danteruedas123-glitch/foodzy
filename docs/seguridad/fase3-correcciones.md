@@ -31,11 +31,11 @@ demostración de la monetización.
 
 ## 3. Pendientes fuera del código
 
-- **Inicio de sesión con Google en el release de Android:** Google comprueba la
-  huella SHA-1 del certificado con el que se firma la app. Hay que agregar la
-  huella de la llave nueva en *Firebase → Configuración del proyecto → Tus apps
-  → Android → Agregar huella digital* y volver a descargar
-  `google-services.json`. Las compilaciones de debug no cambian.
+- ✅ **Inicio de sesión con Google en el release de Android:** Google comprueba
+  la huella SHA-1 del certificado con el que se firma la app. Se agregó en
+  Firebase la huella de la llave nueva (`83:07:14:B5:…:1F:AD`) y se actualizó
+  `google-services.json`. Las huellas de debug de cada equipo siguen
+  registradas, así que las compilaciones de desarrollo no cambian.
 - **Copia de la llave de firma:** si se pierde `foodzy-subida.jks` o su
   contraseña, ya no se pueden publicar actualizaciones con la misma firma.
   Guardarla en un lugar seguro, fuera del repositorio.
