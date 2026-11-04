@@ -61,6 +61,11 @@ android {
             } else {
                 signingConfigs.getByName("release")
             }
+            // R8 encoge y ofusca el código Java/Kotlin y quita recursos sin uso
+            // (hallazgo de seguridad H-07). El código Dart se ofusca aparte,
+            // con `flutter build apk --obfuscate --split-debug-info=...`.
+            isMinifyEnabled = true
+            isShrinkResources = true
         }
     }
 }

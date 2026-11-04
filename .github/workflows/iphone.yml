@@ -44,7 +44,7 @@ jobs:
         # Si falla, las líneas de error quedan en el resumen público de la ejecución.
         run: |
           set -o pipefail
-          if ! flutter build ios --release --no-codesign --dart-define=COMPRAS_PRUEBA=true 2>&1 | tee compilacion.log; then
+          if ! flutter build ios --release --no-codesign --obfuscate --split-debug-info=build/simbolos --dart-define=COMPRAS_PRUEBA=true 2>&1 | tee compilacion.log; then
             grep -iE "error|failed" compilacion.log | tail -30 | while IFS= read -r linea; do echo "::error::$linea"; done
             exit 1
           fi

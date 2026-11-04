@@ -25,7 +25,29 @@ flutter run --dart-define=GEMINI_API_KEY=tu_clave
 ```
 
 La clave de Gemini se obtiene gratis en <https://aistudio.google.com/apikey>.
-También se puede pegar dentro de la app en **Ajustes → Inteligencia artificial**.
+La de `--dart-define` solo se usa en modo debug; en release cada persona la pega
+dentro de la app en **Ajustes → Inteligencia artificial** y se guarda cifrada.
+
+## Compilar el release (Android)
+
+```bash
+flutter build apk --release --obfuscate --split-debug-info=build/simbolos
+```
+
+- `--obfuscate` cambia los nombres del código Dart por otros sin sentido, y
+  `--split-debug-info` guarda aparte los símbolos para poder leer los errores
+  (`flutter symbolize`). No borres `build/simbolos` de una versión publicada.
+- Se firma con la llave que indique `android/key.properties`, que no está en el
+  repositorio:
+
+  ```properties
+  storePassword=...
+  keyPassword=...
+  keyAlias=subida
+  storeFile=C:/ruta/fuera/del/repo/foodzy-subida.jks
+  ```
+
+  Sin ese archivo, Gradle avisa y firma con la llave de debug.
 
 ## Modo local y modo nube
 
