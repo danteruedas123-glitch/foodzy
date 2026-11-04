@@ -7,6 +7,7 @@ import 'package:foodzy/core/notificaciones.dart';
 import 'package:foodzy/core/nube.dart';
 import 'package:foodzy/features/auth/presentation/pantallas/pantalla_login.dart';
 import 'package:foodzy/features/auth/presentation/providers/auth_provider.dart';
+import 'package:foodzy/features/configuracion/presentation/providers/api_key_provider.dart';
 import 'package:foodzy/features/configuracion/presentation/providers/theme_provider.dart';
 import 'package:foodzy/features/home/presentation/pantalla_principal.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -15,9 +16,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Preferencias y Firebase se preparan a la vez, no una después de otra.
-  final (sharedPreferences, _) =
-      await (SharedPreferences.getInstance(), Nube.iniciar()).wait;
+  // Preferencias (y con ellas la clave cifrada de Gemini) y Firebase se
+  // preparan a la vez, no una después de otra.
+  final ((sharedPreferences, claveGemini), _) = await (
+    SharedPreferences.getInstance()
+        .then((prefs) async => (prefs, await ApiKeyNotifier.cargar(prefs))),
+    Nube.iniciar(),
+  ).wait;
   // Las notificaciones (zonas horarias incluidas) se preparan con la app ya
   // en pantalla. Si se abrió tocando un aviso, este llega igual por
   // `alimentoTocado` y lo abre la pantalla principal.
@@ -27,6 +32,7 @@ void main() async {
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(sharedPreferences),
+        claveGeminiGuardadaProvider.overrideWithValue(claveGemini),
       ],
       child: const FoodzyApp(),
     ),
