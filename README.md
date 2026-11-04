@@ -77,5 +77,9 @@ Para iOS hay que añadir también `GoogleService-Info.plist` (ver la documentaci
 
 ## Seguridad
 
-La clave de Gemini va dentro de la app. Es suficiente para uso personal; si vas a
-publicarla, conviene mover las llamadas a la IA a un servidor propio.
+- La clave de Gemini no va dentro del release: cada persona pega la suya y se
+  guarda cifrada (Android Keystore / iOS Keychain). Para una versión comercial,
+  conviene mover las llamadas a la IA a un servidor propio.
+- Los datos de la app no entran en las copias de seguridad de Android y el
+  release no escribe en el log.
+- La auditoría completa (OWASP Mobile Top 10) está en [`docs/seguridad/`](docs/seguridad/).
