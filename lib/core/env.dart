@@ -1,8 +1,15 @@
+import 'package:flutter/foundation.dart';
+
 class Env {
-  /// Clave de Gemini en tiempo de compilación:
+  /// Clave de Gemini en tiempo de compilación, solo para desarrollo:
   /// `flutter run --dart-define=GEMINI_API_KEY=tu_clave`
-  /// También se puede pegar desde Configuración dentro de la app.
-  static const String geminiApiKey = String.fromEnvironment('GEMINI_API_KEY');
+  ///
+  /// En release vale '' y el compilador descarta el valor: todo lo que se pasa
+  /// con `--dart-define` queda en texto plano dentro del binario, y cualquiera
+  /// con el APK o el IPA podría sacarlo (hallazgo de seguridad H-01). Ahí cada
+  /// persona pega su clave en Configuración y se guarda cifrada.
+  static const String geminiApiKey =
+      kDebugMode ? String.fromEnvironment('GEMINI_API_KEY') : '';
 
   /// Modelos multimodales para leer fotos y facturas, en orden de preferencia.
   /// Si uno está saturado o no existe, la app prueba el siguiente.
