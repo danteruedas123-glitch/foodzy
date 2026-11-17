@@ -138,7 +138,7 @@ class AlimentoCard extends StatelessWidget {
                   children: [
                     Text(
                       alimento.nombre,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleMedium
                           ?.copyWith(fontWeight: FontWeight.w800),

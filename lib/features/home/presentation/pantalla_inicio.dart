@@ -509,13 +509,19 @@ class _Atajo extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            child: Row(
+            // Ícono arriba y texto en una sola línea: al lado del ícono no
+            // cabía y quedaba partido ("Tus / números").
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(emoji, style: const TextStyle(fontSize: 24)),
-                const SizedBox(width: 10),
-                Expanded(
+                Text(emoji, style: const TextStyle(fontSize: 22)),
+                const SizedBox(height: 6),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
                   child: Text(texto,
+                      maxLines: 1,
                       style: const TextStyle(fontWeight: FontWeight.w700)),
                 ),
               ],

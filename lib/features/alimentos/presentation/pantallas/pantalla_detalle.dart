@@ -128,7 +128,11 @@ class PantallaDetalle extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Detalle del Alimento'),
+        // En celulares angostos el título no cabía junto a los botones.
+        title: const FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text('Detalle del Alimento', maxLines: 1),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.edit),
