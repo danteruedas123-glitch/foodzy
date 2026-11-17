@@ -1,16 +1,4 @@
-import 'package:flutter/foundation.dart';
-
 class Env {
-  /// Clave de Gemini en tiempo de compilación, solo para desarrollo:
-  /// `flutter run --dart-define=GEMINI_API_KEY=tu_clave`
-  ///
-  /// En release vale '' y el compilador descarta el valor: todo lo que se pasa
-  /// con `--dart-define` queda en texto plano dentro del binario, y cualquiera
-  /// con el APK o el IPA podría sacarlo (hallazgo de seguridad H-01). Ahí cada
-  /// persona pega su clave en Configuración y se guarda cifrada.
-  static const String geminiApiKey =
-      kDebugMode ? String.fromEnvironment('GEMINI_API_KEY') : '';
-
   /// Modelos multimodales para leer fotos y facturas, en orden de preferencia.
   /// Si uno está saturado o no existe, la app prueba el siguiente.
   ///
@@ -27,16 +15,17 @@ class Env {
     'gemini-3.8-flash',
   ];
 
-  /// Para respuestas cortas donde importa más acertar que la velocidad (leer
-  /// una fecha impresa pequeña, estimar cuánto dura un producto): como la
-  /// respuesta es de pocas palabras, un Flash tarda casi lo mismo que un
-  /// Flash-Lite y lee mejor. gemini-3.6-flash primero: admite el
-  /// razonamiento mínimo.
+  /// Para respuestas cortas (leer una fecha impresa pequeña, estimar cuánto
+  /// dura un producto). Antes iban primero los Flash, que leen un poco mejor,
+  /// pero por Firebase AI Logic con la cuota gratuita (medido el 2026-11-17)
+  /// gemini-3.6-flash responde "sin cupo" y gemini-3.8-flash tarda más de 30 s,
+  /// mientras que los Flash-Lite leyeron bien la fecha de prueba en ~1 s.
+  /// Los Flash quedan de respaldo.
   static const List<String> geminiModelosPrecisos = [
-    'gemini-3.6-flash',
-    'gemini-3.8-flash',
     'gemini-3.5-flash-lite',
     'gemini-3.1-flash-lite',
+    'gemini-3.6-flash',
+    'gemini-3.8-flash',
   ];
 
   /// Claves públicas de RevenueCat (Project settings → API keys):

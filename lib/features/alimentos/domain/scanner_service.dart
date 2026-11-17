@@ -7,15 +7,11 @@ import 'package:foodzy/features/alimentos/domain/gemini_client.dart';
 import 'package:foodzy/features/alimentos/domain/alimento.dart';
 import 'package:foodzy/features/alimentos/domain/cantidad.dart';
 import 'package:foodzy/features/alimentos/domain/estado_alimento.dart';
-import 'package:foodzy/features/configuracion/presentation/providers/api_key_provider.dart';
 import 'package:foodzy/features/premium/premium_provider.dart';
 import 'package:image_picker/image_picker.dart';
 
 final scannerServiceProvider = Provider<ScannerService>((ref) {
-  return GeminiScannerService(
-    apiKey: ref.watch(apiKeyProvider),
-    cuota: ref.watch(cuotaIAProvider),
-  );
+  return GeminiScannerService(cuota: ref.watch(cuotaIAProvider));
 });
 
 /// Un alimento que la IA propone, antes de que el usuario lo confirme.
@@ -96,10 +92,9 @@ abstract interface class ScannerService {
 }
 
 class GeminiScannerService implements ScannerService {
-  GeminiScannerService({required this.apiKey, CuotaIA? cuota})
-      : _cliente = GeminiClient(apiKey: apiKey, cuota: cuota);
+  GeminiScannerService({CuotaIA? cuota, GeminiClient? cliente})
+      : _cliente = cliente ?? GeminiClient(cuota: cuota);
 
-  final String apiKey;
   final GeminiClient _cliente;
 
   /// Cómo leer una fecha impresa sin confundirla con otras del empaque.

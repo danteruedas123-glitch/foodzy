@@ -11,7 +11,6 @@ import 'package:foodzy/features/alimentos/presentation/pantallas/pantalla_histor
 import 'package:foodzy/features/auth/presentation/providers/auth_provider.dart';
 import 'package:foodzy/features/configuracion/presentation/providers/historial_ajustes_provider.dart';
 import 'package:foodzy/features/configuracion/presentation/providers/notificaciones_provider.dart';
-import 'package:foodzy/features/configuracion/presentation/providers/api_key_provider.dart';
 import 'package:foodzy/features/configuracion/presentation/providers/theme_provider.dart';
 import 'package:foodzy/features/premium/insignias_premium.dart';
 import 'package:foodzy/features/premium/pantalla_premium.dart';
@@ -28,21 +27,6 @@ class PantallaConfiguracion extends ConsumerStatefulWidget {
 }
 
 class _PantallaConfiguracionState extends ConsumerState<PantallaConfiguracion> {
-  late final TextEditingController _clave;
-  bool _oculta = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _clave = TextEditingController(text: ref.read(apiKeyProvider));
-  }
-
-  @override
-  void dispose() {
-    _clave.dispose();
-    super.dispose();
-  }
-
   static const _colores = [
     Colors.lime,
     Colors.green,
@@ -607,7 +591,6 @@ class _PantallaConfiguracionState extends ConsumerState<PantallaConfiguracion> {
     final theme = Theme.of(context);
     final ajustes = ref.watch(themeProvider);
     final notifier = ref.read(themeProvider.notifier);
-    final claveGuardada = ref.watch(apiKeyProvider);
     final usuario = ref.watch(authProvider).userName ?? 'Usuario';
 
     return ListView(
@@ -643,84 +626,6 @@ class _PantallaConfiguracionState extends ConsumerState<PantallaConfiguracion> {
         ),
         const SizedBox(height: 16),
         _tarjetaPremium(theme),
-        _titulo('Inteligencia artificial'),
-        Card(
-          elevation: 0,
-          color: theme.colorScheme.surfaceContainerLow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(22),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      claveGuardada.isEmpty
-                          ? Icons.key_off_rounded
-                          : Icons.verified_rounded,
-                      color: claveGuardada.isEmpty
-                          ? theme.colorScheme.error
-                          : theme.colorScheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        claveGuardada.isEmpty
-                            ? 'Falta la API Key de Gemini'
-                            : 'API Key de Gemini configurada',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Es lo que lee tus fotos y facturas. Obtén una gratis en aistudio.google.com.',
-                  style: theme.textTheme.bodySmall,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _clave,
-                  obscureText: _oculta,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  decoration: InputDecoration(
-                    hintText: 'Pega tu API Key',
-                    prefixIcon: const Icon(Icons.vpn_key_rounded),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _oculta
-                            ? Icons.visibility_rounded
-                            : Icons.visibility_off_rounded,
-                      ),
-                      onPressed: () => setState(() => _oculta = !_oculta),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: () async {
-                    await ref
-                        .read(apiKeyProvider.notifier)
-                        .guardar(_clave.text);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Clave guardada en este dispositivo.'),
-                        ),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.save_rounded),
-                  label: const Text('Guardar clave'),
-                ),
-              ],
-            ),
-          ),
-        ),
         _titulo('Cuenta y hogar'),
         _tarjetaCuenta(theme),
         _titulo('Notificaciones'),

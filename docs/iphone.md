@@ -36,8 +36,7 @@ Sideloadly la firma con tu Apple ID y la instala.
    verificación en dos pasos, el código que llega a tu iPhone.
 4. La primera vez, en el iPhone: **Ajustes → General → VPN y gestión de
    dispositivos →** toca tu Apple ID → **Confiar**.
-5. Abre Foodzy. En **Ajustes → Inteligencia artificial** pega tu clave de
-   Gemini (la app no trae ninguna).
+5. Abre Foodzy. La IA funciona sin configurar nada: va por Firebase AI Logic.
 
 Con un Apple ID gratuito la firma dura **7 días**: después la app no abre
 hasta reinstalarla con los pasos 2 y 3. Tus datos no se pierden (la despensa
