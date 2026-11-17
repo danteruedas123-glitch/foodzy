@@ -21,12 +21,13 @@ de barras), recibe avisos antes de que algo venza y cocina con lo que tienes.
 
 ```bash
 flutter pub get
-flutter run --dart-define=GEMINI_API_KEY=tu_clave
+flutter run
 ```
 
-La clave de Gemini se obtiene gratis en <https://aistudio.google.com/apikey>.
-La de `--dart-define` solo se usa en modo debug; en release cada persona la pega
-dentro de la app en **Ajustes → Inteligencia artificial** y se guarda cifrada.
+La IA (Gemini) va por **Firebase AI Logic**: la clave de Gemini la guarda
+Firebase y la app no lleva ninguna, ni hay que pegarla. Para que funcione, el
+proyecto de Firebase debe tener activado *AI Logic → Gemini Developer API*
+(<https://console.firebase.google.com/project/fooddzy/ailogic>).
 
 ## Compilar el release (Android)
 
@@ -77,9 +78,9 @@ Para iOS hay que añadir también `GoogleService-Info.plist` (ver la documentaci
 
 ## Seguridad
 
-- La clave de Gemini no va dentro del release: cada persona pega la suya y se
-  guarda cifrada (Android Keystore / iOS Keychain). Para una versión comercial,
-  conviene mover las llamadas a la IA a un servidor propio.
+- La clave de Gemini no va dentro de la app: las peticiones a la IA pasan por
+  Firebase AI Logic, que tiene la clave del lado del servidor (hallazgo H-01).
+  Para blindarlo del todo hace falta App Check, que exige publicar en Play Store.
 - Los datos de la app no entran en las copias de seguridad de Android y el
   release no escribe en el log.
 - La auditoría completa (OWASP Mobile Top 10) está en [`docs/seguridad/`](docs/seguridad/).

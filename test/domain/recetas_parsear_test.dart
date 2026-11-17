@@ -39,7 +39,7 @@ Map<String, dynamic> recetaIA({
     };
 
 void main() {
-  final servicio = RecetasService(GeminiClient(apiKey: ''));
+  final servicio = RecetasService(GeminiClient());
   final despensa = {
     'arroz-1': alimento('arroz-1', 'Arroz', valor: 500),
     'huevo-1': alimento('huevo-1', 'Huevos', valor: 6, unidad: 'u'),

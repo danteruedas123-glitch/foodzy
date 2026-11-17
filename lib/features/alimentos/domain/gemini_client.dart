@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 import 'package:foodzy/core/env.dart';
-import 'package:http/http.dart' as http;
+import 'package:foodzy/core/nube.dart';
 import 'package:image_picker/image_picker.dart';
 
 class ScannerException implements Exception {
@@ -21,44 +22,71 @@ class CuotaIA {
   final Future<void> Function() registrar;
 }
 
-/// Error de la API de Gemini, con su código HTTP y el mensaje que envió.
-class _ErrorGemini implements Exception {
-  const _ErrorGemini(this.codigo, this.mensaje);
+/// Error al pedirle algo a un modelo, con un código al estilo HTTP para
+/// decidir qué hacer: 404 (el modelo no existe), 503 (saturado), 429 (sin
+/// cupo), 403 (la IA no está disponible), 400 (petición rechazada) o 0 (otro).
+class ErrorIA implements Exception {
+  const ErrorIA(this.codigo, this.mensaje);
   final int codigo;
   final String mensaje;
   @override
   String toString() => '$codigo: $mensaje';
 }
 
+/// Un trozo de lo que se le manda a la IA: texto o una imagen.
+sealed class ParteIA {
+  const ParteIA();
+}
+
+final class TextoIA extends ParteIA {
+  const TextoIA(this.texto);
+  final String texto;
+}
+
+final class ImagenIA extends ParteIA {
+  const ImagenIA(this.mime, this.bytes);
+  final String mime;
+  final Uint8List bytes;
+}
+
+/// Hace una petición a un [modelo] con un nivel de razonamiento (`null` = el
+/// que el modelo trae por defecto) y devuelve el texto de la respuesta, sin
+/// las partes de razonamiento. Lanza [ErrorIA] si falla.
+typedef TransporteIA = Future<String> Function(
+  String modelo,
+  List<ParteIA> partes, {
+  required String? nivel,
+});
+
 /// Cliente común de Gemini: prueba una cadena de modelos con reintentos y
 /// devuelve el JSON ya decodificado. Lo usan el escáner y las recetas.
 ///
-/// Habla con la API REST directamente (con `http`) para poder pedir el nivel
-/// de razonamiento más bajo que acepte cada modelo: leer una foto o una
-/// factura no necesita que el modelo "piense" a fondo, y hacerlo era lo que
-/// más demoraba cada respuesta.
+/// Las peticiones van por **Firebase AI Logic**: la clave de Gemini vive en
+/// el proyecto de Firebase y nunca está dentro de la app (antes había que
+/// pegarla en Ajustes, y compilarla en el binario era el hallazgo de
+/// seguridad H-01). Se pide el nivel de razonamiento más bajo que acepte cada
+/// modelo: leer una foto o una factura no necesita que el modelo "piense" a
+/// fondo, y hacerlo era lo que más demoraba cada respuesta.
 class GeminiClient {
-  GeminiClient({required this.apiKey, this.cuota, http.Client? cliente})
-      : _http = cliente ?? _compartido;
+  GeminiClient({this.cuota, TransporteIA? transporte})
+      : _transporte = transporte ?? _porFirebase;
 
-  /// Una sola conexión para toda la app: las peticiones seguidas reutilizan
-  /// la conexión segura ya abierta en vez de negociar una nueva cada vez.
-  static final _compartido = http.Client();
-
-  final String apiKey;
   final CuotaIA? cuota;
-  final http.Client _http;
-
-  static const _base = 'https://generativelanguage.googleapis.com/v1beta/models';
+  final TransporteIA _transporte;
 
   // Lo que se aprende de los modelos se recuerda entre peticiones (mientras
-  // la app esté abierta y no cambie la clave), para no repetir en cada
-  // escaneo intentos que ya se sabe que fallan.
-  static String? _claveRecordada;
+  // la app esté abierta), para no repetir en cada escaneo intentos que ya se
+  // sabe que fallan.
 
   /// El último modelo que respondió, por modo (rápido o preciso).
   static final _ultimoQueRespondio = <bool, String>{};
   static final _noExisten = <String>{};
+
+  /// Modelos que respondieron "sin cupo" y hasta cuándo no se prueban: la
+  /// cuota gratuita se recupera sola, pero mientras tanto cada intento
+  /// costaba segundos en cada escaneo.
+  static final _sinCupoHasta = <String, DateTime>{};
+  static const _pausaSinCupo = Duration(minutes: 5);
 
   /// Niveles de razonamiento, del más rápido al más lento. No todos los
   /// modelos admiten todos (gemini-3.8-flash no admite "minimal"); `null` es
@@ -68,21 +96,28 @@ class GeminiClient {
   /// Por modelo, el primer nivel que aceptó (posición en [_niveles]).
   static final _nivelPorModelo = <String, int>{};
 
+  /// Olvida lo aprendido de los modelos (para que las pruebas no se mezclen).
+  @visibleForTesting
+  static void olvidar() {
+    _ultimoQueRespondio.clear();
+    _noExisten.clear();
+    _nivelPorModelo.clear();
+    _sinCupoHasta.clear();
+  }
+
   /// Modelos en el orden en que se prueban: primero el último que respondió.
   List<String> _modelosEnOrden(bool preciso) {
-    final clave = apiKey.trim();
-    if (_claveRecordada != clave) {
-      _claveRecordada = clave;
-      _ultimoQueRespondio.clear();
-      _noExisten.clear();
-      _nivelPorModelo.clear();
-    }
     final ultimo = _ultimoQueRespondio[preciso];
-    return [
+    final todos = [
       ?ultimo,
       for (final m in preciso ? Env.geminiModelosPrecisos : Env.geminiModelos)
         if (m != ultimo && !_noExisten.contains(m)) m,
     ];
+    // Los que están sin cupo van al final (no se descartan: si todos lo
+    // están, igual se intenta).
+    final ahora = DateTime.now();
+    bool sinCupo(String m) => _sinCupoHasta[m]?.isAfter(ahora) ?? false;
+    return [...todos.where((m) => !sinCupo(m)), ...todos.where(sinCupo)];
   }
 
   /// Con [preciso] se prueban primero los modelos que leen mejor
@@ -93,23 +128,11 @@ class GeminiClient {
     List<XFile> imagenes = const [],
     bool preciso = false,
   }) async {
-    if (apiKey.trim().isEmpty) {
-      throw const ScannerException(
-        'Falta la API Key de Gemini. Pégala en Ajustes → Inteligencia artificial.',
-      );
-    }
-
     cuota?.verificar();
 
-    final partes = <Map<String, dynamic>>[
-      {'text': prompt},
-      for (final img in imagenes)
-        {
-          'inlineData': {
-            'mimeType': _mime(img),
-            'data': base64Encode(await img.readAsBytes()),
-          },
-        },
+    final partes = <ParteIA>[
+      TextoIA(prompt),
+      for (final img in imagenes) ImagenIA(_mime(img), await img.readAsBytes()),
     ];
 
     // Se prueba cada modelo; si está saturado se reintenta una vez y, si
@@ -118,7 +141,7 @@ class GeminiClient {
     // siguiente modelo si uno falla; si todos estaban saturados, se espera
     // un momento y se vuelve a intentar con los que no dieron "no existe".
     String? texto;
-    String? ultimoError;
+    ErrorIA? ultimoError;
     final descartados = <String>{};
     for (var vuelta = 0; vuelta < 2 && texto == null; vuelta++) {
       var huboSaturacion = false;
@@ -129,26 +152,24 @@ class GeminiClient {
           texto = await _generar(nombre, partes);
           _ultimoQueRespondio[preciso] = nombre;
           break;
-        } on _ErrorGemini catch (e) {
+        } on ErrorIA catch (e) {
           debugPrint('[IA] $nombre falló tras ${intento.elapsedMilliseconds}ms: $e');
-          ultimoError = e.toString();
-          final m = ultimoError.toLowerCase();
-          if (m.contains('api key') || m.contains('api_key')) {
-            throw ScannerException(_traducir(ultimoError));
-          }
-          final saturado = e.codigo == 503 ||
-              m.contains('demand') ||
-              m.contains('overloaded') ||
-              m.contains('unavailable');
-          if (saturado) {
+          ultimoError = e;
+          // Un 403 (AI Logic sin activar o sin permiso) no se reintenta con
+          // el mismo modelo, pero sí se prueba el siguiente: justo después
+          // de activarlo, Firebase tarda unos minutos en dejar pasar a todos.
+          if (e.codigo == 503) {
             huboSaturacion = true;
           } else {
-            descartados.add(nombre); // sin acceso, sin cupo...
+            descartados.add(nombre); // sin cupo, petición rechazada...
             if (e.codigo == 404) _noExisten.add(nombre);
+            if (e.codigo == 429) {
+              _sinCupoHasta[nombre] = DateTime.now().add(_pausaSinCupo);
+            }
           }
         } catch (e) {
           debugPrint('[IA] $nombre falló tras ${intento.elapsedMilliseconds}ms: $e');
-          ultimoError = e.toString();
+          ultimoError = ErrorIA(0, e.toString());
           huboSaturacion = true; // tiempo agotado o red: se reintenta luego
         }
       }
@@ -176,14 +197,14 @@ class GeminiClient {
   /// Una petición a un modelo con el nivel de razonamiento más bajo que
   /// acepte. Si rechaza un nivel, prueba el siguiente y recuerda cuál sirvió
   /// para no repetir el rechazo en la próxima petición.
-  Future<String> _generar(String modelo, List<Map<String, dynamic>> partes) async {
+  Future<String> _generar(String modelo, List<ParteIA> partes) async {
     var i = _nivelPorModelo[modelo] ?? 0;
     while (true) {
       try {
-        final texto = await _llamar(modelo, partes, nivel: _niveles[i]);
+        final texto = await _transporte(modelo, partes, nivel: _niveles[i]);
         _nivelPorModelo[modelo] = i;
         return texto;
-      } on _ErrorGemini catch (e) {
+      } on ErrorIA catch (e) {
         final rechazoElNivel = _niveles[i] != null &&
             e.codigo == 400 &&
             e.mensaje.toLowerCase().contains('think');
@@ -193,70 +214,102 @@ class GeminiClient {
     }
   }
 
-  Future<String> _llamar(
+  // ── Firebase AI Logic ───────────────────────────────────────────────────
+
+  static const _nivelesFirebase = {
+    'minimal': ThinkingLevel.minimal,
+    'low': ThinkingLevel.low,
+  };
+
+  static Future<String> _porFirebase(
     String modelo,
-    List<Map<String, dynamic>> partes, {
+    List<ParteIA> partes, {
     required String? nivel,
   }) async {
-    final reloj = Stopwatch()..start();
-    final respuesta = await _http
-        .post(
-          Uri.parse('$_base/$modelo:generateContent'),
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': apiKey.trim(),
-          },
-          body: jsonEncode({
-            'contents': [
-              {'role': 'user', 'parts': partes},
-            ],
-            'generationConfig': {
-              'responseMimeType': 'application/json',
-              'temperature': 0.4,
-              if (nivel != null) 'thinkingConfig': {'thinkingLevel': nivel},
-            },
-          }),
-        )
-        .timeout(const Duration(seconds: 40));
-
-    final cuerpo = utf8.decode(respuesta.bodyBytes);
-    reloj.stop();
-    Object? json;
-    try {
-      json = jsonDecode(cuerpo);
-    } catch (_) {
-      json = null;
+    if (!Nube.disponible) {
+      throw const ErrorIA(403,
+          'La IA necesita la conexión con la nube de Foodzy, y esta copia de la app no la tiene.');
     }
-
-    if (respuesta.statusCode != 200) {
-      final error = json is Map ? json['error'] : null;
-      final mensaje = error is Map
-          ? '${error['status'] ?? ''} ${error['message'] ?? ''}'.trim()
-          : cuerpo;
-      throw _ErrorGemini(respuesta.statusCode, mensaje);
+    final reloj = Stopwatch()..start();
+    final GenerateContentResponse respuesta;
+    try {
+      respuesta = await FirebaseAI.googleAI()
+          .generativeModel(
+            model: modelo,
+            generationConfig: GenerationConfig(
+              responseMimeType: 'application/json',
+              temperature: 0.4,
+              thinkingConfig: nivel == null
+                  ? null
+                  : ThinkingConfig.withThinkingLevel(_nivelesFirebase[nivel]),
+            ),
+          )
+          .generateContent([
+            Content.multi([
+              for (final p in partes)
+                switch (p) {
+                  TextoIA(:final texto) => TextPart(texto),
+                  ImagenIA(:final mime, :final bytes) => InlineDataPart(mime, bytes),
+                },
+            ]),
+          ])
+          .timeout(const Duration(seconds: 40));
+    } on ServiceApiNotEnabled catch (e) {
+      throw ErrorIA(403, e.message);
+    } on QuotaExceeded catch (e) {
+      throw ErrorIA(429, e.message);
+    } on FirebaseAIException catch (e) {
+      throw ErrorIA(codigoDe(e.message), e.message);
     }
 
     // Tiempos y tokens de cada respuesta, para saber qué demora el escaneo
-    // (se ve con `adb logcat -s flutter`).
-    final uso = json is Map ? json['usageMetadata'] : null;
-    if (uso is Map) {
-      final kb = partes.fold<int>(0, (n, p) => n + jsonEncode(p).length) ~/ 1024;
-      debugPrint('[IA] $modelo nivel=${nivel ?? 'por defecto'} envío=${kb}KB '
-          'tiempo=${reloj.elapsedMilliseconds}ms tokens: entrada=${uso['promptTokenCount']} '
-          'razonamiento=${uso['thoughtsTokenCount'] ?? 0} salida=${uso['candidatesTokenCount']}');
-    }
+    // (se ve con `adb logcat -s flutter`; en release no se escribe nada).
+    final uso = respuesta.usageMetadata;
+    final kb = partes.fold<int>(
+            0,
+            (n, p) => n +
+                switch (p) {
+                  TextoIA(:final texto) => texto.length,
+                  ImagenIA(:final bytes) => bytes.length,
+                }) ~/
+        1024;
+    debugPrint('[IA] $modelo nivel=${nivel ?? 'por defecto'} envío=${kb}KB '
+        'tiempo=${reloj.elapsedMilliseconds}ms tokens: entrada=${uso?.promptTokenCount} '
+        'razonamiento=${uso?.thoughtsTokenCount ?? 0} salida=${uso?.candidatesTokenCount}');
 
-    // Se juntan los textos de la respuesta, sin las partes de razonamiento.
-    final candidatos = json is Map ? json['candidates'] : null;
-    if (candidatos is! List || candidatos.isEmpty) return '';
-    final contenido = candidatos.first is Map ? candidatos.first['content'] : null;
-    final partesRespuesta = contenido is Map ? contenido['parts'] : null;
-    if (partesRespuesta is! List) return '';
-    return partesRespuesta
-        .whereType<Map>()
-        .where((p) => p['thought'] != true && p['text'] is String)
-        .map((p) => p['text'] as String)
-        .join();
+    try {
+      return respuesta.text ?? '';
+    } on FirebaseAIException catch (e) {
+      throw ErrorIA(400, e.message); // respuesta bloqueada
+    }
+  }
+
+  /// Firebase no entrega el código HTTP del error, solo el mensaje: se
+  /// deduce de él.
+  @visibleForTesting
+  static int codigoDe(String mensaje) {
+    final m = mensaje.toLowerCase();
+    // AI Logic sin activar en el proyecto de Firebase.
+    if (_sinActivar(m)) return 403;
+    if (m.contains('not found') ||
+        m.contains('not_found') ||
+        m.contains('is not supported for generatecontent')) {
+      return 404;
+    }
+    if (m.contains('overloaded') ||
+        m.contains('unavailable') ||
+        m.contains('high demand') ||
+        m.contains('503')) {
+      return 503;
+    }
+    if (m.contains('quota') || m.contains('resource_exhausted') || m.contains('429')) {
+      return 429;
+    }
+    if (m.contains('permission_denied') || m.contains('api key') || m.contains('api_key')) {
+      return 403;
+    }
+    if (m.contains('invalid_argument') || m.contains('think')) return 400;
+    return 0;
   }
 
   String _limpiar(String texto) {
@@ -278,17 +331,25 @@ class GeminiClient {
     return 'image/jpeg';
   }
 
-  String _traducir(String mensaje) {
-    final m = mensaje.toLowerCase();
-    if (m.contains('api key') || m.contains('api_key')) {
-      return 'La API Key de Gemini no es válida. Revísala en Ajustes.';
+  static bool _sinActivar(String m) =>
+      m.contains('ailogic') ||
+      m.contains('ai logic') ||
+      m.contains('firebasevertexai') ||
+      m.contains('has not been used in project') ||
+      m.contains('does not have required permission to use project');
+
+  String _traducir(ErrorIA e) {
+    if (e.codigo == 403) {
+      return _sinActivar(e.mensaje.toLowerCase())
+          ? 'La IA de Foodzy no está activada todavía. Inténtalo más tarde.'
+          : 'La IA no está disponible: ${e.mensaje}';
     }
-    if (m.contains('quota') || m.contains('429') || m.contains('resource_exhausted')) {
-      return 'Se alcanzó el límite de uso de Gemini. Intenta de nuevo en un momento.';
+    if (e.codigo == 429) {
+      return 'Se alcanzó el límite de uso de la IA. Intenta de nuevo en un momento.';
     }
-    if (m.contains('demand') || m.contains('overloaded') || m.contains('503')) {
+    if (e.codigo == 503) {
       return 'Los servidores de la IA están saturados en este momento. Espera un minuto y reintenta.';
     }
-    return 'Error de la IA: $mensaje';
+    return 'Error de la IA: ${e.mensaje}';
   }
 }
