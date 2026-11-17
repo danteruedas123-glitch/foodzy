@@ -86,16 +86,27 @@ class _PantallaRecetasState extends ConsumerState<PantallaRecetas> {
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: SegmentedButton<_Vista>(
-              showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: _Vista.sugeridas, label: Text('Sugeridas'), icon: Icon(Icons.auto_awesome_rounded)),
-                ButtonSegment(value: _Vista.favoritas, label: Text('Favoritas'), icon: Icon(Icons.favorite_rounded)),
-                ButtonSegment(value: _Vista.plan, label: Text('Semana'), icon: Icon(Icons.calendar_month_rounded)),
-              ],
-              selected: {_vista},
-              onSelectionChanged: (s) => setState(() => _vista = s.first),
-            ),
+            // En pantallas angostas los íconos no caben junto al texto y las
+            // palabras se partían ("Sugerid-as"): ahí solo va el texto.
+            child: LayoutBuilder(builder: (context, c) {
+              final conIconos = c.maxWidth >= 420;
+              ButtonSegment<_Vista> segmento(_Vista v, String texto, IconData icono) =>
+                  ButtonSegment(
+                    value: v,
+                    label: Text(texto, maxLines: 1, softWrap: false, overflow: TextOverflow.fade),
+                    icon: conIconos ? Icon(icono) : null,
+                  );
+              return SegmentedButton<_Vista>(
+                showSelectedIcon: false,
+                segments: [
+                  segmento(_Vista.sugeridas, 'Sugeridas', Icons.auto_awesome_rounded),
+                  segmento(_Vista.favoritas, 'Favoritas', Icons.favorite_rounded),
+                  segmento(_Vista.plan, 'Semana', Icons.calendar_month_rounded),
+                ],
+                selected: {_vista},
+                onSelectionChanged: (s) => setState(() => _vista = s.first),
+              );
+            }),
           ),
         ),
         switch (_vista) {

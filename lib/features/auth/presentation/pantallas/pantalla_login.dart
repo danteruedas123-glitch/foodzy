@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foodzy/core/nube.dart';
 import 'package:foodzy/features/auth/presentation/pantallas/pantalla_registro.dart';
 import 'package:foodzy/features/auth/presentation/providers/auth_provider.dart';
-import 'package:foodzy/features/auth/presentation/widgets/video_background.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:foodzy/features/auth/presentation/widgets/campos_auth.dart';
+import 'package:foodzy/features/auth/presentation/widgets/fondo_auth.dart';
 
 class PantallaLogin extends ConsumerStatefulWidget {
   const PantallaLogin({super.key});
@@ -17,7 +17,6 @@ class _PantallaLoginState extends ConsumerState<PantallaLogin> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
-  bool _obscureText = true;
 
   @override
   void dispose() {
@@ -109,25 +108,24 @@ class _PantallaLoginState extends ConsumerState<PantallaLogin> {
     }
   }
 
+  void _abrirRegistro() {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => const PantallaRegistro(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+            FadeTransition(opacity: animation, child: child),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: const Color(0xFF0A120D),
       body: Stack(
         children: [
-          // Fondo animado en bucle (sin presentación previa)
-          const VideoBackground(
-            assetPath: 'assets/videos/fondo_limpio.mp4',
-            loop: true,
-          ),
-
-          // Capa oscura muy sutil para asegurar legibilidad
-          Container(
-            color: Colors.black.withValues(alpha: 0.2),
-          ),
-
-          // Formulario de inicio de sesión
-          _buildLoginForm(context),
+          const FondoAuth(),
+          SafeArea(child: _buildLoginForm(context)),
         ],
       ),
     );
@@ -136,188 +134,116 @@ class _PantallaLoginState extends ConsumerState<PantallaLogin> {
   Widget _buildLoginForm(BuildContext context) {
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 32.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Título Foodzy recreado con símbolo de infinito para que sea 100% transparente
-            Text(
-              'f∞dzy',
-              style: GoogleFonts.quicksand(
-                fontSize: 64,
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFFE8F3D6), // Tono verdoso/crema del logo original
-                letterSpacing: -2.0,
-              ),
-            ),
-            const SizedBox(height: 50),
-            
-            // Campo Usuario
-            _buildVideoStyleTextField(
-              controller: _emailController,
-              hintText: 'Usuario',
-              icon: Icons.person_outline,
-              keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: 16),
-            
-            // Campo Password
-            _buildVideoStyleTextField(
-              controller: _passwordController,
-              hintText: 'Contraseña',
-              icon: Icons.lock_outline,
-              isPassword: true,
-            ),
-            
-            const SizedBox(height: 8),
-            
-            // Texto pequeño de registro alineado a la derecha
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    PageRouteBuilder(
-                      pageBuilder: (context, animation, secondaryAnimation) => const PantallaRegistro(),
-                      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                        return FadeTransition(opacity: animation, child: child);
-                      },
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: EstiloAuth.anchoMaximo),
+          child: AutofillGroup(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const LogoAuth(),
+                const SizedBox(height: 40),
+                CampoAuth(
+                  controller: _emailController,
+                  etiqueta: 'Correo electrónico',
+                  icono: Icons.mail_outline,
+                  teclado: TextInputType.emailAddress,
+                  autocompletar: const [AutofillHints.email],
+                ),
+                const SizedBox(height: 14),
+                CampoAuth(
+                  controller: _passwordController,
+                  etiqueta: 'Contraseña',
+                  icono: Icons.lock_outline,
+                  esContrasena: true,
+                  accion: TextInputAction.done,
+                  autocompletar: const [AutofillHints.password],
+                  alEnviar: _handleLogin,
+                ),
+                if (Nube.disponible)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: _recuperarContrasena,
+                      style: TextButton.styleFrom(foregroundColor: Colors.white),
+                      child: Text(
+                        '¿Olvidaste tu contraseña?',
+                        style: EstiloAuth.texto(14, peso: FontWeight.w600, color: Colors.white70),
+                      ),
                     ),
-                  );
-                },
-                style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  )
+                else
+                  const SizedBox(height: 14),
+                const SizedBox(height: 12),
+                BotonAuth(
+                  texto: 'Iniciar sesión',
+                  cargando: _isLoading,
+                  alTocar: _handleLogin,
                 ),
-                child: Text(
-                  'Regístrate aquí',
-                  style: GoogleFonts.quicksand(
-                    color: const Color(0xFF7DD279), // Verde brillante de tu mockup
-                    fontSize: 14,
-                    decoration: TextDecoration.underline,
-                    decorationColor: const Color(0xFF7DD279),
-                    fontWeight: FontWeight.w600,
+                if (Nube.disponible) ...[
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.25))),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text('o', style: EstiloAuth.texto(14, color: Colors.white60)),
+                      ),
+                      Expanded(child: Divider(color: Colors.white.withValues(alpha: 0.25))),
+                    ],
                   ),
-                ),
-              ),
-            ),
-            
-            const SizedBox(height: 32),
-            
-            // Botón Login Verde
-            Container(
-              width: double.infinity,
-              height: 55,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF7DD279).withValues(alpha: 0.3),
-                    blurRadius: 20,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _handleLogin,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF7DD279), // Verde del mockup
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
-                  ),
-                  elevation: 0,
-                ),
-                child: _isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : Text(
-                        'Iniciar Sesión',
-                        style: GoogleFonts.quicksand(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    height: EstiloAuth.alto,
+                    child: OutlinedButton.icon(
+                      onPressed: _isLoading ? null : _handleGoogle,
+                      icon: const Icon(Icons.account_circle_outlined, size: 22),
+                      label: Text(
+                        'Continuar con Google',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: EstiloAuth.texto(16, peso: FontWeight.w700),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        backgroundColor: Colors.white.withValues(alpha: 0.06),
+                        side: BorderSide(color: Colors.white.withValues(alpha: 0.4)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(EstiloAuth.radio),
                         ),
                       ),
-              ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 28),
+                Text.rich(
+                  TextSpan(
+                    text: '¿No tienes cuenta? ',
+                    style: EstiloAuth.texto(14, color: Colors.white70),
+                    children: [
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.baseline,
+                        baseline: TextBaseline.alphabetic,
+                        child: GestureDetector(
+                          onTap: _abrirRegistro,
+                          child: Text(
+                            'Regístrate',
+                            style: EstiloAuth.texto(14, peso: FontWeight.w700, color: EstiloAuth.verde)
+                                .copyWith(
+                              decoration: TextDecoration.underline,
+                              decorationColor: EstiloAuth.verde,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
-            if (Nube.disponible) ...[
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: OutlinedButton.icon(
-                  onPressed: _isLoading ? null : _handleGoogle,
-                  icon: const Icon(Icons.account_circle_outlined),
-                  label: Text(
-                    'Continuar con Google',
-                    style: GoogleFonts.quicksand(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: BorderSide(color: Colors.white.withValues(alpha: 0.6)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(28),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-            if (Nube.disponible)
-              TextButton(
-                onPressed: _recuperarContrasena,
-                child: Text(
-                  '¿Olvidaste tu contraseña?',
-                  style: GoogleFonts.quicksand(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVideoStyleTextField({
-    required TextEditingController controller,
-    required String hintText,
-    required IconData icon,
-    bool isPassword = false,
-    TextInputType? keyboardType,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.3),
-          width: 1.0,
-        ),
-      ),
-      child: TextField(
-        controller: controller,
-        obscureText: isPassword && _obscureText,
-        keyboardType: keyboardType,
-        style: GoogleFonts.quicksand(color: Colors.white, fontSize: 16),
-        decoration: InputDecoration(
-          hintText: hintText,
-          hintStyle: GoogleFonts.quicksand(color: Colors.white60),
-          prefixIcon: Icon(icon, color: Colors.white70),
-          suffixIcon: isPassword
-              ? IconButton(
-                  icon: Icon(
-                    _obscureText ? Icons.visibility_off : Icons.visibility,
-                    color: Colors.white70,
-                  ),
-                  onPressed: () => setState(() => _obscureText = !_obscureText),
-                )
-              : null,
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          ),
         ),
       ),
     );

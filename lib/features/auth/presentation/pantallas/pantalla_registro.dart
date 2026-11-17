@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:foodzy/features/auth/presentation/providers/auth_provider.dart';
-import 'package:foodzy/features/auth/presentation/widgets/video_background.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:foodzy/features/auth/presentation/widgets/campos_auth.dart';
+import 'package:foodzy/features/auth/presentation/widgets/fondo_auth.dart';
 
 class PantallaRegistro extends ConsumerStatefulWidget {
   const PantallaRegistro({super.key});
@@ -15,9 +15,8 @@ class _PantallaRegistroState extends ConsumerState<PantallaRegistro> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController(); // Added confirm password
+  final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
-  bool _obscureText = true;
 
   @override
   void dispose() {
@@ -84,213 +83,116 @@ class _PantallaRegistroState extends ConsumerState<PantallaRegistro> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black, 
+      backgroundColor: const Color(0xFF0A120D),
       body: Stack(
         children: [
-          // Fondo de video limpio en bucle infinito
-          const VideoBackground(
-            assetPath: 'assets/videos/fondo_limpio.mp4',
-            loop: true,
-          ),
-          
-          // Capa oscura muy sutil
-          Container(
-            color: Colors.black.withValues(alpha: 0.2),
-          ),
-
-          // Botón de atrás (AppBar transparente)
-          Positioned(
-            top: 40,
-            left: 16,
-            child: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ),
-
-          // Formulario Registro
-          Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 32.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(height: 20),
-                  // Título Foodzy recreado con símbolo de infinito para que sea 100% transparente
-                  Text(
-                    'f∞dzy',
-                    style: GoogleFonts.quicksand(
-                      fontSize: 64,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFFE8F3D6), // Tono verdoso/crema del logo original
-                      letterSpacing: -2.0,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  
-                  // Subtítulo
-                  Text(
-                    'Crear Cuenta',
-                    style: GoogleFonts.quicksand(
-                      fontSize: 22,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  
-                  // Campo Nombre Completo
-                  _buildVideoStyleTextField(
-                    controller: _nameController,
-                    hintText: 'Nombre Completo',
-                    icon: Icons.person_outline,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Campo Correo
-                  _buildVideoStyleTextField(
-                    controller: _emailController,
-                    hintText: 'Correo Electrónico',
-                    icon: Icons.email_outlined,
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // Campo Password
-                  _buildVideoStyleTextField(
-                    controller: _passwordController,
-                    hintText: 'Contraseña',
-                    icon: Icons.lock_outline,
-                    isPassword: true,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Campo Confirm Password
-                  _buildVideoStyleTextField(
-                    controller: _confirmPasswordController,
-                    hintText: 'Confirmar Contraseña',
-                    icon: Icons.person_add_outlined,
-                    isPassword: true,
-                  ),
-                  
-                  const SizedBox(height: 24),
-                  
-                  // Texto pequeño de iniciar sesión
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        '¿Ya tienes una cuenta? ',
-                        style: GoogleFonts.quicksand(
-                          color: Colors.white,
-                          fontSize: 14,
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text(
-                          'Inicia sesión aquí',
-                          style: GoogleFonts.quicksand(
-                            color: const Color(0xFF7DD279), // Verde brillante
-                            fontSize: 14,
-                            decoration: TextDecoration.underline,
-                            decorationColor: const Color(0xFF7DD279),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  
-                  const SizedBox(height: 32),
-                  
-                  // Botón Registrarse Verde
-                  Container(
-                    width: double.infinity,
-                    height: 55,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(28),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF7DD279).withValues(alpha: 0.3),
-                          blurRadius: 20,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _handleRegister,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF7DD279),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(28),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: _isLoading
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : Text(
-                              'Registrarse',
-                              style: GoogleFonts.quicksand(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
+          const FondoAuth(),
+          SafeArea(
+            child: Stack(
+              children: [
+                Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(24, 56, 24, 24),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: EstiloAuth.anchoMaximo),
+                      child: AutofillGroup(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const LogoAuth(),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Crear cuenta',
+                              textAlign: TextAlign.center,
+                              style: EstiloAuth.texto(22),
                             ),
+                            const SizedBox(height: 32),
+                            CampoAuth(
+                              controller: _nameController,
+                              etiqueta: 'Nombre completo',
+                              icono: Icons.person_outline,
+                              teclado: TextInputType.name,
+                              autocompletar: const [AutofillHints.name],
+                            ),
+                            const SizedBox(height: 14),
+                            CampoAuth(
+                              controller: _emailController,
+                              etiqueta: 'Correo electrónico',
+                              icono: Icons.mail_outline,
+                              teclado: TextInputType.emailAddress,
+                              autocompletar: const [AutofillHints.email],
+                            ),
+                            const SizedBox(height: 14),
+                            CampoAuth(
+                              controller: _passwordController,
+                              etiqueta: 'Contraseña',
+                              icono: Icons.lock_outline,
+                              esContrasena: true,
+                              autocompletar: const [AutofillHints.newPassword],
+                            ),
+                            const SizedBox(height: 14),
+                            CampoAuth(
+                              controller: _confirmPasswordController,
+                              etiqueta: 'Confirmar contraseña',
+                              icono: Icons.lock_reset_outlined,
+                              esContrasena: true,
+                              accion: TextInputAction.done,
+                              autocompletar: const [AutofillHints.newPassword],
+                              alEnviar: _handleRegister,
+                            ),
+                            const SizedBox(height: 28),
+                            BotonAuth(
+                              texto: 'Registrarse',
+                              cargando: _isLoading,
+                              alTocar: _handleRegister,
+                            ),
+                            const SizedBox(height: 24),
+                            Text.rich(
+                              TextSpan(
+                                text: '¿Ya tienes una cuenta? ',
+                                style: EstiloAuth.texto(14, color: Colors.white70),
+                                children: [
+                                  WidgetSpan(
+                                    alignment: PlaceholderAlignment.baseline,
+                                    baseline: TextBaseline.alphabetic,
+                                    child: GestureDetector(
+                                      onTap: () => Navigator.of(context).pop(),
+                                      child: Text(
+                                        'Inicia sesión',
+                                        style: EstiloAuth.texto(14,
+                                                peso: FontWeight.w700, color: EstiloAuth.verde)
+                                            .copyWith(
+                                          decoration: TextDecoration.underline,
+                                          decorationColor: EstiloAuth.verde,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                ],
-              ),
+                ),
+                // Atrás, dentro del área segura (no queda debajo de la cámara).
+                Positioned(
+                  top: 4,
+                  left: 4,
+                  child: IconButton(
+                    tooltip: 'Volver',
+                    icon: const Icon(Icons.arrow_back, color: Colors.white, size: 26),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildVideoStyleTextField({
-    required TextEditingController controller,
-    required String hintText,
-    required IconData icon,
-    bool isPassword = false,
-    TextInputType? keyboardType,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.3),
-          width: 1.0,
-        ),
-      ),
-      child: TextField(
-        controller: controller,
-        obscureText: isPassword && _obscureText,
-        keyboardType: keyboardType,
-        style: GoogleFonts.quicksand(color: Colors.white, fontSize: 16),
-        decoration: InputDecoration(
-          hintText: hintText,
-          hintStyle: GoogleFonts.quicksand(color: Colors.white60),
-          prefixIcon: Icon(icon, color: Colors.white70),
-          suffixIcon: isPassword
-              ? IconButton(
-                  icon: Icon(
-                    _obscureText ? Icons.visibility_off : Icons.visibility,
-                    color: Colors.white70,
-                  ),
-                  onPressed: () => setState(() => _obscureText = !_obscureText),
-                )
-              : null,
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-        ),
       ),
     );
   }

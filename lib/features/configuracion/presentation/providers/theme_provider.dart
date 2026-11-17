@@ -12,7 +12,7 @@ class ThemeSettings {
     required this.primaryColor,
     required this.fontFamily,
     this.themeMode = ThemeMode.system,
-    this.fondoAnimado = true,
+    this.fondoAnimado = false,
   });
 
   final Color primaryColor;
@@ -58,7 +58,7 @@ class ThemeNotifier extends Notifier<ThemeSettings> {
       primaryColor: Color(colorValue),
       fontFamily: fontName,
       themeMode: modo,
-      fondoAnimado: prefs.getBool(_fondoKey) ?? true,
+      fondoAnimado: prefs.getBool(_fondoKey) ?? false,
     );
   }
 
